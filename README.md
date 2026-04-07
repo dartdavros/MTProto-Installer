@@ -26,6 +26,7 @@
 
 Скачай скрипт и сделай его исполняемым:
 ```
+curl -fsSL https://github.com/dartdavros/MTProto-Installer/blob/main/install-mtproxy.sh | sh
 chmod +x install-mtproxy.sh
 ```
 Запусти установку:
