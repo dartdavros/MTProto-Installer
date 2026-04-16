@@ -146,11 +146,10 @@ build_mtproxy() {
   install -m 0755 "${SRC_DIR}/objs/bin/mtproto-proxy" "${BIN_PATH}"
 
   if (( PORT <= 1024 )); then
-    log "Выдаю capability для биндинга к привилегированному порту ${PORT}..."
-    setcap 'cap_net_bind_service=+ep' "${BIN_PATH}"
-  else
-    setcap -r "${BIN_PATH}" 2>/dev/null || true
+    info "Порт ${PORT} привилегированный: capability будет выдан через systemd unit"
   fi
+
+  setcap -r "${BIN_PATH}" 2>/dev/null || true
 }
 
 ensure_secret() {
@@ -240,6 +239,8 @@ ExecStartPre=/usr/bin/test -r ${CONFIG_DIR}/proxy-multi.conf
 ExecStart=${BIN_PATH} -u ${RUN_USER} -p ${INTERNAL_PORT} -H ${PORT} -S ${secret} --aes-pwd ${CONFIG_DIR}/proxy-secret ${CONFIG_DIR}/proxy-multi.conf -M ${WORKERS}
 Restart=on-failure
 RestartSec=5
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
