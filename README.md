@@ -14,7 +14,7 @@
 - создается managed bundle из нескольких ссылок;
 - есть persisted manifest, link slots, ротация ссылок и health/status;
 - для official engine работает daily refresh Telegram config;
-- для stealth engine есть реальный runtime adapter, `TLS_DOMAIN` и optional upstream decoy forwarding.
+- для stealth engine есть реальный runtime adapter, `TLS_DOMAIN`, upstream decoy forwarding и local loopback HTTPS decoy.
 
 ---
 
@@ -34,7 +34,9 @@
 - ротация одной ссылки или всех ссылок;
 - engine-aware secret storage и link rendering;
 - автоматический daily refresh `proxy-multi.conf` через systemd timer для `ENGINE=official`;
-- stealth runtime через `telemt` для `ENGINE=stealth`.
+- stealth runtime через `telemt` для `ENGINE=stealth`;
+- `DECOY_MODE=local-https` с отдельным local-only HTTPS decoy service на loopback;
+- `check-domain`, `test-decoy` и явный `migrate-install` для финального operator workflow.
 
 ---
 
@@ -47,8 +49,9 @@
 
 Для `ENGINE=stealth`:
 
-- если используется `DECOY_MODE=upstream-forward`, нужен реальный upstream HTTPS target.
-- `DECOY_MODE=local-https` пока не реализован, потому что для него нужен отдельный честный локальный HTTPS decoy contour с сертификатами и backend topology.
+- если используется `DECOY_MODE=upstream-forward`, нужен реальный upstream HTTPS target;
+- если используется `DECOY_MODE=local-https`, поднимается отдельный local-only HTTPS decoy service на `127.0.0.1`;
+- для `local-https` можно либо передать `DECOY_CERT_PATH` + `DECOY_KEY_PATH`, либо позволить скрипту сгенерировать self-signed certificate для `DECOY_DOMAIN`.
 
 ---
 
@@ -94,6 +97,34 @@ sudo \
   bash ./install-mtproxy.sh install
 ```
 
+### Stealth engine + local HTTPS decoy
+
+С самоподписанным сертификатом, который скрипт сгенерирует сам:
+
+```bash
+sudo \
+  PUBLIC_DOMAIN=proxy.example.com \
+  ENGINE=stealth \
+  TLS_DOMAIN=proxy.example.com \
+  DECOY_MODE=local-https \
+  DECOY_DOMAIN=www.example.com \
+  bash ./install-mtproxy.sh install
+```
+
+С уже подготовленным сертификатом:
+
+```bash
+sudo \
+  PUBLIC_DOMAIN=proxy.example.com \
+  ENGINE=stealth \
+  TLS_DOMAIN=proxy.example.com \
+  DECOY_MODE=local-https \
+  DECOY_DOMAIN=www.example.com \
+  DECOY_CERT_PATH=/root/certs/www.example.com.crt \
+  DECOY_KEY_PATH=/root/certs/www.example.com.key \
+  bash ./install-mtproxy.sh install
+```
+
 ---
 
 ## Поведение после установки
@@ -105,6 +136,7 @@ sudo \
 - engine;
 - TLS domain;
 - decoy mode;
+- decoy target/domain, если выбран decoy;
 - количество сгенерированных links.
 
 Сами `secret` и `tg://` ссылки не печатаются.
@@ -183,6 +215,23 @@ sudo bash ./install-mtproxy.sh status
 sudo bash ./install-mtproxy.sh health
 ```
 
+### Проверить DNS домена до или после установки
+
+```bash
+sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh check-domain
+```
+
+Если установка уже выполнена, можно запустить без переменных окружения — команда возьмет домен из manifest.
+
+### Проверить decoy contour
+
+```bash
+sudo bash ./install-mtproxy.sh test-decoy
+```
+
+Для `DECOY_MODE=upstream-forward` команда проверяет TCP/TLS доступность upstream target.
+Для `DECOY_MODE=local-https` команда проверяет local service, loopback HTTPS probe и SAN сертификата.
+
 ### Показать ссылки намеренно
 
 ```bash
@@ -222,6 +271,18 @@ sudo bash ./install-mtproxy.sh refresh-telegram-config
 sudo bash ./install-mtproxy.sh update-config
 ```
 
+### Миграция со старой single-secret установки
+
+```bash
+sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh migrate-install
+```
+
+Что делает команда:
+
+- подхватывает legacy secret и upstream Telegram artifacts, если они уже существуют;
+- пытается извлечь `PUBLIC_PORT`, `INTERNAL_PORT` и `WORKERS` из legacy `mtproxy.service`, если manifest еще не создан;
+- переносит установку в managed artifact model без ручной правки файлов.
+
 ### Перезапуск
 
 ```bash
@@ -249,13 +310,25 @@ sudo bash ./install-mtproxy.sh uninstall
 | `LINK_STRATEGY` | `bundle` | `bundle` или `per-device` |
 | `DEVICE_NAMES` | — | Список устройств через запятую для `LINK_STRATEGY=per-device` |
 | `TLS_DOMAIN` | `PUBLIC_DOMAIN` | Fake-TLS / SNI domain для `ENGINE=stealth` |
-| `DECOY_MODE` | `disabled` | `disabled` или `upstream-forward` |
-| `DECOY_TARGET_HOST` | — | Upstream target host для decoy |
-| `DECOY_TARGET_PORT` | `443` | Upstream target port для decoy |
+| `DECOY_MODE` | `disabled` | `disabled`, `upstream-forward` или `local-https` |
+| `DECOY_TARGET_HOST` | — | Upstream target host для `DECOY_MODE=upstream-forward` |
+| `DECOY_TARGET_PORT` | `443` | Upstream target port для `DECOY_MODE=upstream-forward` |
+| `DECOY_DOMAIN` | `TLS_DOMAIN` | Домен сертификата и local HTTPS decoy для `DECOY_MODE=local-https` |
+| `DECOY_LOCAL_PORT` | `10443` | Loopback port local HTTPS decoy |
+| `DECOY_CERT_PATH` | — | Путь к готовому certificate для `DECOY_MODE=local-https` |
+| `DECOY_KEY_PATH` | — | Путь к готовому private key для `DECOY_MODE=local-https` |
 | `OFFICIAL_REPO_URL` | `https://github.com/TelegramMessenger/MTProxy.git` | Репозиторий official MTProxy |
 | `OFFICIAL_REPO_BRANCH` | `master` | Ветка official MTProxy |
 | `STEALTH_REPO_URL` | `https://github.com/telemt/telemt.git` | Репозиторий telemt |
 | `STEALTH_REPO_BRANCH` | `main` | Ветка telemt |
+
+### Проверка local decoy
+
+Для `DECOY_MODE=local-https` `health` дополнительно проверяет:
+
+- состояние `mtproxy-decoy.service`;
+- loopback listener на `127.0.0.1:$DECOY_LOCAL_PORT`;
+- HTTPS probe через `curl -sk --resolve ...`.
 
 Совместимость:
 
@@ -322,8 +395,8 @@ sudo journalctl -u mtproxy.service -n 100 --no-pager
 
 ## Ограничения текущей итерации
 
-- `DECOY_MODE=local-https` пока не реализован;
-- автоматический decoy deployment не делается — для `upstream-forward` нужен уже существующий HTTPS target;
+- для `DECOY_MODE=local-https` без `DECOY_CERT_PATH` / `DECOY_KEY_PATH` будет создан self-signed certificate;
+- для `DECOY_MODE=upstream-forward` нужен уже существующий HTTPS target;
 - one-VPS deployment по-прежнему не защищает от прямой блокировки IP/ASN.
 
 ---

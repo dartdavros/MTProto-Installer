@@ -42,6 +42,12 @@ LINK_BUNDLE_PATH="${LINKS_DIR}/bundle.tsv"
 RUNNER_PATH="${LIBEXEC_DIR}/mtproxy-run"
 REFRESH_HELPER_PATH="${LIBEXEC_DIR}/mtproxy-refresh"
 STEALTH_TLS_FRONT_DIR="${STATE_DIR}/tlsfront"
+DECOY_CONFIG_DIR="${CONFIG_ROOT}/decoy"
+DECOY_CERT_DIR="${DECOY_CONFIG_DIR}/certs"
+DECOY_WWW_DIR="${STATE_DIR}/decoy/www"
+DECOY_MANAGED_CERT_PATH="${DECOY_CERT_DIR}/local.crt"
+DECOY_MANAGED_KEY_PATH="${DECOY_CERT_DIR}/local.key"
+DECOY_SERVER_PATH="${LIBEXEC_DIR}/mtproxy-decoy-server"
 
 SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_NAME="mtproxy.service"
@@ -50,6 +56,8 @@ REFRESH_SERVICE_NAME="mtproxy-refresh.service"
 REFRESH_SERVICE_PATH="${SYSTEMD_DIR}/${REFRESH_SERVICE_NAME}"
 REFRESH_TIMER_NAME="mtproxy-refresh.timer"
 REFRESH_TIMER_PATH="${SYSTEMD_DIR}/${REFRESH_TIMER_NAME}"
+DECOY_SERVICE_NAME="mtproxy-decoy.service"
+DECOY_SERVICE_PATH="${SYSTEMD_DIR}/${DECOY_SERVICE_NAME}"
 
 SYSCTL_FILE="/etc/sysctl.d/90-mtproxy.conf"
 LEGACY_SECRET_PATH="${CONFIG_ROOT}/secret"
@@ -68,6 +76,10 @@ REQUESTED_TLS_DOMAIN="${TLS_DOMAIN:-}"
 REQUESTED_DECOY_MODE="${DECOY_MODE:-}"
 REQUESTED_DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
 REQUESTED_DECOY_TARGET_PORT="${DECOY_TARGET_PORT:-}"
+REQUESTED_DECOY_DOMAIN="${DECOY_DOMAIN:-}"
+REQUESTED_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT:-}"
+REQUESTED_DECOY_CERT_PATH="${DECOY_CERT_PATH:-}"
+REQUESTED_DECOY_KEY_PATH="${DECOY_KEY_PATH:-}"
 
 PUBLIC_DOMAIN=""
 PUBLIC_PORT="443"
@@ -81,6 +93,10 @@ TLS_DOMAIN=""
 DECOY_MODE="disabled"
 DECOY_TARGET_HOST=""
 DECOY_TARGET_PORT="443"
+DECOY_DOMAIN=""
+DECOY_LOCAL_PORT="10443"
+DECOY_CERT_SOURCE_PATH=""
+DECOY_KEY_SOURCE_PATH=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -130,6 +146,75 @@ validate_host_or_ip() {
   local value="$1"
   [[ -n "${value}" ]] || die "Требуется host/ip"
   [[ "${value}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Некорректный host/ip: ${value}"
+}
+
+has_manifest() {
+  [[ -f "${MANIFEST_PATH}" ]]
+}
+
+collect_domain_candidates() {
+  local value="$1"
+  getent ahosts "${value}" 2>/dev/null | awk '{print $1}' || true
+}
+
+collect_unique_lines() {
+  awk 'NF && !seen[$0]++ { print $0 }'
+}
+
+collect_local_global_ips() {
+  ip -o -4 addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -v '^127\.' || true
+  ip -o -6 addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -vi '^::1$' || true
+}
+
+line_in_block() {
+  local needle="$1"
+  local haystack="$2"
+  grep -Fqx -- "${needle}" <<< "${haystack}"
+}
+
+parse_legacy_service_exec_flag() {
+  local flag="$1"
+  [[ -f "${SERVICE_PATH}" ]] || return 1
+
+  awk -v flag="${flag}" '
+    /^ExecStart=/ {
+      line = $0
+      sub(/^ExecStart=/, "", line)
+      n = split(line, fields, /[[:space:]]+/)
+      for (i = 1; i < n; i++) {
+        if (fields[i] == flag) {
+          print fields[i + 1]
+          exit
+        }
+      }
+    }
+  ' "${SERVICE_PATH}"
+}
+
+populate_contract_from_legacy_service_if_needed() {
+  local legacy_public_port legacy_internal_port legacy_workers
+
+  [[ -f "${MANIFEST_PATH}" ]] && return 0
+  [[ -f "${SERVICE_PATH}" ]] || return 0
+
+  legacy_public_port="$(parse_legacy_service_exec_flag '-H' || true)"
+  legacy_internal_port="$(parse_legacy_service_exec_flag '-p' || true)"
+  legacy_workers="$(parse_legacy_service_exec_flag '-M' || true)"
+
+  if [[ -z "${REQUESTED_PUBLIC_PORT}" && -z "${MANIFEST_PUBLIC_PORT}" && -n "${legacy_public_port}" ]]; then
+    info "Найден legacy public port: ${legacy_public_port}"
+    PUBLIC_PORT="${legacy_public_port}"
+  fi
+
+  if [[ -z "${REQUESTED_INTERNAL_PORT}" && -z "${MANIFEST_INTERNAL_PORT}" && -n "${legacy_internal_port}" ]]; then
+    info "Найден legacy internal port: ${legacy_internal_port}"
+    INTERNAL_PORT="${legacy_internal_port}"
+  fi
+
+  if [[ -z "${REQUESTED_WORKERS}" && -z "${MANIFEST_WORKERS}" && -n "${legacy_workers}" ]]; then
+    info "Найден legacy workers count: ${legacy_workers}"
+    WORKERS="${legacy_workers}"
+  fi
 }
 
 normalize_device_names_csv() {
@@ -193,6 +278,10 @@ read_manifest_contract() {
   MANIFEST_DECOY_MODE=""
   MANIFEST_DECOY_TARGET_HOST=""
   MANIFEST_DECOY_TARGET_PORT=""
+  MANIFEST_DECOY_DOMAIN=""
+  MANIFEST_DECOY_LOCAL_PORT=""
+  MANIFEST_DECOY_CERT_SOURCE_PATH=""
+  MANIFEST_DECOY_KEY_SOURCE_PATH=""
   MANIFEST_OFFICIAL_REPO_URL=""
   MANIFEST_OFFICIAL_REPO_BRANCH=""
   MANIFEST_STEALTH_REPO_URL=""
@@ -211,6 +300,10 @@ read_manifest_contract() {
     local DECOY_MODE=""
     local DECOY_TARGET_HOST=""
     local DECOY_TARGET_PORT=""
+    local DECOY_DOMAIN=""
+    local DECOY_LOCAL_PORT=""
+    local DECOY_CERT_PATH=""
+    local DECOY_KEY_PATH=""
     local OFFICIAL_REPO_URL=""
     local OFFICIAL_REPO_BRANCH=""
     local STEALTH_REPO_URL=""
@@ -231,6 +324,10 @@ read_manifest_contract() {
     MANIFEST_DECOY_MODE="${DECOY_MODE:-}"
     MANIFEST_DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
     MANIFEST_DECOY_TARGET_PORT="${DECOY_TARGET_PORT:-}"
+    MANIFEST_DECOY_DOMAIN="${DECOY_DOMAIN:-}"
+    MANIFEST_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT:-}"
+    MANIFEST_DECOY_CERT_SOURCE_PATH="${DECOY_CERT_PATH:-}"
+    MANIFEST_DECOY_KEY_SOURCE_PATH="${DECOY_KEY_PATH:-}"
     MANIFEST_OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL:-}"
     MANIFEST_OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH:-}"
     MANIFEST_STEALTH_REPO_URL="${STEALTH_REPO_URL:-}"
@@ -257,6 +354,10 @@ resolve_install_contract() {
   DECOY_MODE="${REQUESTED_DECOY_MODE:-${MANIFEST_DECOY_MODE:-disabled}}"
   DECOY_TARGET_HOST="${REQUESTED_DECOY_TARGET_HOST:-${MANIFEST_DECOY_TARGET_HOST:-}}"
   DECOY_TARGET_PORT="${REQUESTED_DECOY_TARGET_PORT:-${MANIFEST_DECOY_TARGET_PORT:-443}}"
+  DECOY_DOMAIN="${REQUESTED_DECOY_DOMAIN:-${MANIFEST_DECOY_DOMAIN:-${TLS_DOMAIN}}}"
+  DECOY_LOCAL_PORT="${REQUESTED_DECOY_LOCAL_PORT:-${MANIFEST_DECOY_LOCAL_PORT:-10443}}"
+  DECOY_CERT_SOURCE_PATH="${REQUESTED_DECOY_CERT_PATH:-${MANIFEST_DECOY_CERT_SOURCE_PATH:-}}"
+  DECOY_KEY_SOURCE_PATH="${REQUESTED_DECOY_KEY_PATH:-${MANIFEST_DECOY_KEY_SOURCE_PATH:-}}"
 
   OFFICIAL_REPO_URL="${REQUESTED_OFFICIAL_REPO_URL:-${MANIFEST_OFFICIAL_REPO_URL:-${OFFICIAL_REPO_URL_DEFAULT}}}"
   OFFICIAL_REPO_BRANCH="${REQUESTED_OFFICIAL_REPO_BRANCH:-${MANIFEST_OFFICIAL_REPO_BRANCH:-${OFFICIAL_REPO_BRANCH_DEFAULT}}}"
@@ -266,11 +367,15 @@ resolve_install_contract() {
   DEVICE_NAMES="$(normalize_device_names_csv "${DEVICE_NAMES}")"
   PUBLIC_DOMAIN="${PUBLIC_DOMAIN,,}"
   TLS_DOMAIN="${TLS_DOMAIN,,}"
+  DECOY_DOMAIN="${DECOY_DOMAIN,,}"
+
+  populate_contract_from_legacy_service_if_needed
 }
 
 validate_runtime_settings() {
   validate_port "${PUBLIC_PORT}"
   validate_port "${INTERNAL_PORT}"
+  validate_port "${DECOY_LOCAL_PORT}"
 
   [[ "${WORKERS}" =~ ^[0-9]+$ ]] || die "WORKERS должен быть числом"
   (( WORKERS >= 1 )) || die "WORKERS должен быть >= 1"
@@ -320,7 +425,15 @@ validate_install_contract() {
           validate_port "${DECOY_TARGET_PORT}"
           ;;
         local-https)
-          die "DECOY_MODE=local-https еще не реализован в этой итерации"
+          validate_domain "${DECOY_DOMAIN}"
+          validate_port "${DECOY_LOCAL_PORT}"
+          [[ "${DECOY_LOCAL_PORT}" != "${PUBLIC_PORT}" ]] || die "DECOY_LOCAL_PORT должен отличаться от PUBLIC_PORT"
+
+          if [[ -n "${DECOY_CERT_SOURCE_PATH}" || -n "${DECOY_KEY_SOURCE_PATH}" ]]; then
+            [[ -n "${DECOY_CERT_SOURCE_PATH}" && -n "${DECOY_KEY_SOURCE_PATH}" ]] || die "Для DECOY_MODE=local-https нужно задать одновременно DECOY_CERT_PATH и DECOY_KEY_PATH"
+            [[ -f "${DECOY_CERT_SOURCE_PATH}" ]] || die "Не найден DECOY_CERT_PATH: ${DECOY_CERT_SOURCE_PATH}"
+            [[ -f "${DECOY_KEY_SOURCE_PATH}" ]] || die "Не найден DECOY_KEY_PATH: ${DECOY_KEY_SOURCE_PATH}"
+          fi
           ;;
         *)
           die "Поддерживаются только DECOY_MODE=disabled|upstream-forward|local-https"
@@ -393,6 +506,8 @@ ensure_packages() {
     ufw
     libcap2-bin
     pkg-config
+    openssl
+    python3
   )
 
   if [[ "${ENGINE}" == "stealth" ]]; then
@@ -425,13 +540,16 @@ ensure_user_and_dirs() {
     "${RUNTIME_DIR}" \
     "${STATE_DIR}" \
     "${LIBEXEC_DIR}" \
-    "${STEALTH_TLS_FRONT_DIR}"
+    "${STEALTH_TLS_FRONT_DIR}" \
+    "${DECOY_CONFIG_DIR}" \
+    "${DECOY_CERT_DIR}" \
+    "${DECOY_WWW_DIR}"
 
-  chown root:"${RUN_GROUP}" "${CONFIG_ROOT}" "${MANIFEST_DIR}" "${SECRETS_DIR}" "${LINKS_DIR}" "${RUNTIME_DIR}"
-  chmod 750 "${CONFIG_ROOT}" "${MANIFEST_DIR}" "${SECRETS_DIR}" "${LINKS_DIR}" "${RUNTIME_DIR}"
+  chown root:"${RUN_GROUP}" "${CONFIG_ROOT}" "${MANIFEST_DIR}" "${SECRETS_DIR}" "${LINKS_DIR}" "${RUNTIME_DIR}" "${DECOY_CONFIG_DIR}" "${DECOY_CERT_DIR}"
+  chmod 750 "${CONFIG_ROOT}" "${MANIFEST_DIR}" "${SECRETS_DIR}" "${LINKS_DIR}" "${RUNTIME_DIR}" "${DECOY_CONFIG_DIR}" "${DECOY_CERT_DIR}"
 
   chown -R "${RUN_USER}:${RUN_GROUP}" "${STATE_DIR}"
-  chmod 750 "${STATE_DIR}" "${STEALTH_TLS_FRONT_DIR}"
+  chmod 750 "${STATE_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
 }
 
 clone_or_update_engine_repo() {
@@ -769,6 +887,7 @@ persist_manifest() {
     quote_kv LINK_DEFINITIONS_PATH "${LINK_DEFINITIONS_PATH}"
     quote_kv LINK_BUNDLE_PATH "${LINK_BUNDLE_PATH}"
     quote_kv SERVICE_NAME "${SERVICE_NAME}"
+    quote_kv DECOY_SERVICE_NAME "${DECOY_SERVICE_NAME}"
     quote_kv PUBLIC_DOMAIN "${PUBLIC_DOMAIN}"
     quote_kv PUBLIC_PORT "${PUBLIC_PORT}"
     quote_kv INTERNAL_PORT "${INTERNAL_PORT}"
@@ -781,6 +900,10 @@ persist_manifest() {
     quote_kv DECOY_MODE "${DECOY_MODE}"
     quote_kv DECOY_TARGET_HOST "${DECOY_TARGET_HOST}"
     quote_kv DECOY_TARGET_PORT "${DECOY_TARGET_PORT}"
+    quote_kv DECOY_DOMAIN "${DECOY_DOMAIN}"
+    quote_kv DECOY_LOCAL_PORT "${DECOY_LOCAL_PORT}"
+    quote_kv DECOY_CERT_PATH "${DECOY_CERT_SOURCE_PATH}"
+    quote_kv DECOY_KEY_PATH "${DECOY_KEY_SOURCE_PATH}"
   } > "${MANIFEST_PATH}"
 }
 
@@ -831,7 +954,7 @@ render_stealth_config() {
 
   compute_link_mode_flags
 
-  if [[ "${DECOY_MODE}" == "upstream-forward" ]]; then
+  if [[ "${DECOY_MODE}" == "upstream-forward" || "${DECOY_MODE}" == "local-https" ]]; then
     mask_enabled="true"
     unknown_sni_action="mask"
   fi
@@ -878,6 +1001,11 @@ EOF_CFG
 mask_host = "${DECOY_TARGET_HOST}"
 mask_port = ${DECOY_TARGET_PORT}
 EOF_CFG
+  elif [[ "${DECOY_MODE}" == "local-https" ]]; then
+    cat >> "${STEALTH_CONFIG_PATH}" <<EOF_CFG
+mask_host = "127.0.0.1"
+mask_port = ${DECOY_LOCAL_PORT}
+EOF_CFG
   fi
 
   printf '\n[access.users]\n' >> "${STEALTH_CONFIG_PATH}"
@@ -901,6 +1029,146 @@ render_engine_runtime_artifacts() {
   esac
 }
 
+write_decoy_site_content() {
+  cat > "${DECOY_WWW_DIR}/index.html" <<EOF_DECOY_HTML
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${DECOY_DOMAIN}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f9fc; color: #1f2937; }
+    main { max-width: 720px; margin: 12vh auto; padding: 0 24px; }
+    h1 { font-size: 32px; margin: 0 0 12px; }
+    p { line-height: 1.6; color: #4b5563; }
+    .card { background: #fff; border-radius: 18px; padding: 28px 32px; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08); }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Welcome to ${DECOY_DOMAIN}</h1>
+      <p>This service is online.</p>
+      <p>Please contact the site owner if you expected a different destination.</p>
+    </section>
+  </main>
+</body>
+</html>
+EOF_DECOY_HTML
+}
+
+ensure_decoy_tls_material() {
+  local tmp_cert tmp_key
+
+  if [[ -n "${DECOY_CERT_SOURCE_PATH}" && -n "${DECOY_KEY_SOURCE_PATH}" ]]; then
+    log "Копирую предоставленный decoy TLS certificate..."
+    install -o root -g "${RUN_GROUP}" -m 0640 "${DECOY_CERT_SOURCE_PATH}" "${DECOY_MANAGED_CERT_PATH}"
+    install -o root -g "${RUN_GROUP}" -m 0640 "${DECOY_KEY_SOURCE_PATH}" "${DECOY_MANAGED_KEY_PATH}"
+    return 0
+  fi
+
+  if [[ -f "${DECOY_MANAGED_CERT_PATH}" && -f "${DECOY_MANAGED_KEY_PATH}" ]]; then
+    info "Decoy TLS certificate уже существует, переиспользую"
+    return 0
+  fi
+
+  warn "DECOY_CERT_PATH/DECOY_KEY_PATH не заданы, генерирую self-signed certificate для ${DECOY_DOMAIN}"
+  tmp_cert="$(mktemp)"
+  tmp_key="$(mktemp)"
+  trap 'rm -f "${tmp_cert}" "${tmp_key}"' RETURN
+
+  openssl req \
+    -x509 \
+    -newkey rsa:2048 \
+    -sha256 \
+    -nodes \
+    -days 397 \
+    -subj "/CN=${DECOY_DOMAIN}" \
+    -addext "subjectAltName=DNS:${DECOY_DOMAIN}" \
+    -keyout "${tmp_key}" \
+    -out "${tmp_cert}" >/dev/null 2>&1
+
+  install -o root -g "${RUN_GROUP}" -m 0640 "${tmp_cert}" "${DECOY_MANAGED_CERT_PATH}"
+  install -o root -g "${RUN_GROUP}" -m 0640 "${tmp_key}" "${DECOY_MANAGED_KEY_PATH}"
+
+  rm -f "${tmp_cert}" "${tmp_key}"
+  trap - RETURN
+}
+
+render_decoy_server_script() {
+  cat > "${DECOY_SERVER_PATH}" <<EOF_DECOY_SERVER
+#!/usr/bin/env python3
+import functools
+import ssl
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+HOST = "127.0.0.1"
+PORT = ${DECOY_LOCAL_PORT}
+ROOT = r"${DECOY_WWW_DIR}"
+CERT = r"${DECOY_MANAGED_CERT_PATH}"
+KEY = r"${DECOY_MANAGED_KEY_PATH}"
+
+class DecoyHandler(SimpleHTTPRequestHandler):
+    server_version = "nginx"
+    sys_version = ""
+
+    def log_message(self, format, *args):
+        return
+
+handler = functools.partial(DecoyHandler, directory=ROOT)
+server = ThreadingHTTPServer((HOST, PORT), handler)
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.minimum_version = ssl.TLSVersion.TLSv1_2
+context.load_cert_chain(CERT, KEY)
+server.socket = context.wrap_socket(server.socket, server_side=True)
+server.serve_forever()
+EOF_DECOY_SERVER
+}
+
+render_decoy_service_file() {
+  cat > "${DECOY_SERVICE_PATH}" <<EOF_DECOY_SERVICE
+[Unit]
+Description=Local HTTPS decoy for Telegram MTProxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+Group=${RUN_GROUP}
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=${DECOY_WWW_DIR}
+ExecStartPre=/usr/bin/test -x ${DECOY_SERVER_PATH}
+ExecStartPre=/usr/bin/test -r ${DECOY_MANAGED_CERT_PATH}
+ExecStartPre=/usr/bin/test -r ${DECOY_MANAGED_KEY_PATH}
+ExecStart=${DECOY_SERVER_PATH}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=${CONFIG_ROOT} ${STATE_DIR}
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
+EOF_DECOY_SERVICE
+}
+
+render_decoy_runtime_artifacts() {
+  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+    ensure_decoy_tls_material
+    write_decoy_site_content
+    render_decoy_server_script
+    render_decoy_service_file
+  else
+    rm -f "${DECOY_SERVER_PATH}" "${DECOY_SERVICE_PATH}"
+  fi
+}
+
 apply_permissions() {
   log "Применяю права..."
 
@@ -913,6 +1181,8 @@ apply_permissions() {
   [[ -f "${STEALTH_CONFIG_PATH}" ]] && chown root:"${RUN_GROUP}" "${STEALTH_CONFIG_PATH}" && chmod 0640 "${STEALTH_CONFIG_PATH}"
   [[ -f "${LINK_DEFINITIONS_PATH}" ]] && chown root:"${RUN_GROUP}" "${LINK_DEFINITIONS_PATH}" && chmod 0640 "${LINK_DEFINITIONS_PATH}"
   [[ -f "${LINK_BUNDLE_PATH}" ]] && chown root:"${RUN_GROUP}" "${LINK_BUNDLE_PATH}" && chmod 0640 "${LINK_BUNDLE_PATH}"
+  [[ -f "${DECOY_MANAGED_CERT_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_MANAGED_CERT_PATH}" && chmod 0640 "${DECOY_MANAGED_CERT_PATH}"
+  [[ -f "${DECOY_MANAGED_KEY_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_MANAGED_KEY_PATH}" && chmod 0640 "${DECOY_MANAGED_KEY_PATH}"
 
   if compgen -G "${SECRETS_DIR}/*.secret" >/dev/null; then
     chown root:"${RUN_GROUP}" "${SECRETS_DIR}"/*.secret
@@ -921,9 +1191,10 @@ apply_permissions() {
 
   [[ -f "${RUNNER_PATH}" ]] && chown root:"${RUN_GROUP}" "${RUNNER_PATH}" && chmod 0750 "${RUNNER_PATH}"
   [[ -f "${REFRESH_HELPER_PATH}" ]] && chown root:"${RUN_GROUP}" "${REFRESH_HELPER_PATH}" && chmod 0750 "${REFRESH_HELPER_PATH}"
+  [[ -f "${DECOY_SERVER_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_SERVER_PATH}" && chmod 0750 "${DECOY_SERVER_PATH}"
 
   chown -R "${RUN_USER}:${RUN_GROUP}" "${STATE_DIR}"
-  chmod 750 "${STATE_DIR}" "${STEALTH_TLS_FRONT_DIR}"
+  chmod 750 "${STATE_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
 }
 
 ensure_pid_workaround() {
@@ -1106,9 +1377,20 @@ reload_and_enable_units() {
   else
     systemctl disable --now "${REFRESH_TIMER_NAME}" >/dev/null 2>&1 || true
   fi
+
+  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+    systemctl enable "${DECOY_SERVICE_NAME}" >/dev/null
+  else
+    systemctl disable --now "${DECOY_SERVICE_NAME}" >/dev/null 2>&1 || true
+  fi
 }
 
 start_service() {
+  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+    log "Запускаю ${DECOY_SERVICE_NAME}..."
+    systemctl restart "${DECOY_SERVICE_NAME}"
+  fi
+
   log "Запускаю ${SERVICE_NAME}..."
   systemctl restart "${SERVICE_NAME}"
 
@@ -1164,6 +1446,12 @@ show_post_install_summary() {
   fi
   echo "TLS domain: ${TLS_DOMAIN}"
   echo "Decoy:      ${DECOY_MODE}"
+  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "upstream-forward" ]]; then
+    echo "Decoy upstream: ${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}"
+  elif [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+    echo "Decoy domain: ${DECOY_DOMAIN}"
+    echo "Decoy local:  127.0.0.1:${DECOY_LOCAL_PORT}"
+  fi
   echo "Links:      $(awk 'END {print NR+0}' "${LINK_BUNDLE_PATH}")"
   echo
   echo "Секреты и tg:// ссылки по умолчанию не печатаются."
@@ -1175,6 +1463,183 @@ show_post_install_summary() {
   echo "  sudo bash $0 health"
   echo "========================================"
   echo
+}
+
+print_domain_diagnostics() {
+  local domain="$1"
+  local label="$2"
+  local resolved_ips local_ips line matched=0
+
+  validate_domain "${domain}"
+
+  resolved_ips="$(collect_domain_candidates "${domain}" | collect_unique_lines)"
+  local_ips="$(collect_local_global_ips | collect_unique_lines)"
+
+  echo "${label}: ${domain}"
+
+  if [[ -n "${resolved_ips}" ]]; then
+    echo "  resolved IPs:"
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] || continue
+      printf '    - %s
+' "${line}"
+      if [[ -n "${local_ips}" ]] && line_in_block "${line}" "${local_ips}"; then
+        matched=1
+      fi
+    done <<< "${resolved_ips}"
+  else
+    echo "  [warn] DNS lookup returned no A/AAAA records"
+  fi
+
+  if [[ -n "${local_ips}" ]]; then
+    echo "  local global IPs:"
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] || continue
+      printf '    - %s
+' "${line}"
+    done <<< "${local_ips}"
+  else
+    echo "  [warn] no global IPs detected on this host"
+  fi
+
+  if [[ -n "${resolved_ips}" && -n "${local_ips}" ]]; then
+    if (( matched == 1 )); then
+      echo "  [ok] at least one DNS record matches a local global IP"
+    else
+      echo "  [warn] DNS records do not match local global IPs"
+    fi
+  fi
+}
+
+check_domain_command() {
+  read_manifest_contract
+
+  local domain="${REQUESTED_PUBLIC_DOMAIN:-${MANIFEST_PUBLIC_DOMAIN:-}}"
+  local tls_domain="${REQUESTED_TLS_DOMAIN:-${MANIFEST_TLS_DOMAIN:-}}"
+
+  [[ -n "${domain}" ]] || die "Укажи PUBLIC_DOMAIN либо выполни команду на установленной системе"
+
+  print_domain_diagnostics "${domain,,}" "Public domain"
+
+  if [[ -n "${tls_domain}" && "${tls_domain,,}" != "${domain,,}" ]]; then
+    echo
+    print_domain_diagnostics "${tls_domain,,}" "TLS domain"
+  fi
+}
+
+effective_decoy_cert_path() {
+  if [[ -f "${DECOY_MANAGED_CERT_PATH}" ]]; then
+    printf '%s
+' "${DECOY_MANAGED_CERT_PATH}"
+  else
+    printf '%s
+' "${DECOY_CERT_SOURCE_PATH}"
+  fi
+}
+
+effective_decoy_key_path() {
+  if [[ -f "${DECOY_MANAGED_KEY_PATH}" ]]; then
+    printf '%s
+' "${DECOY_MANAGED_KEY_PATH}"
+  else
+    printf '%s
+' "${DECOY_KEY_SOURCE_PATH}"
+  fi
+}
+
+test_decoy_command() {
+  require_installed
+
+  [[ "${ENGINE}" == "stealth" ]] || die "test-decoy поддержан только для ENGINE=stealth"
+  [[ "${DECOY_MODE}" != "disabled" ]] || die "Decoy отключен: DECOY_MODE=disabled"
+
+  local failed=0
+  local cert_path key_path
+
+  echo "Decoy diagnostics:"
+  echo "  mode: ${DECOY_MODE}"
+
+  case "${DECOY_MODE}" in
+    upstream-forward)
+      echo "  target: ${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}"
+
+      if timeout 10 bash -lc "cat < /dev/null > /dev/tcp/${DECOY_TARGET_HOST}/${DECOY_TARGET_PORT}" 2>/dev/null; then
+        echo "  [ok] upstream target accepts TCP connection"
+      else
+        echo "  [fail] upstream target TCP connection failed"
+        failed=1
+      fi
+
+      if curl -skI --connect-timeout 5 --max-time 10 "https://${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}/" >/dev/null; then
+        echo "  [ok] upstream HTTPS probe succeeded"
+      else
+        echo "  [fail] upstream HTTPS probe failed"
+        failed=1
+      fi
+      ;;
+    local-https)
+      echo "  domain: ${DECOY_DOMAIN}"
+      echo "  local:  127.0.0.1:${DECOY_LOCAL_PORT}"
+
+      if systemctl is-active --quiet "${DECOY_SERVICE_NAME}"; then
+        echo "  [ok] decoy service active"
+      else
+        echo "  [fail] decoy service inactive"
+        failed=1
+      fi
+
+      cert_path="$(effective_decoy_cert_path)"
+      key_path="$(effective_decoy_key_path)"
+
+      if [[ -f "${cert_path}" && -f "${key_path}" ]]; then
+        echo "  [ok] decoy TLS material present"
+      else
+        echo "  [fail] decoy TLS material missing"
+        failed=1
+      fi
+
+      if curl -sk --resolve "${DECOY_DOMAIN}:${DECOY_LOCAL_PORT}:127.0.0.1" "https://${DECOY_DOMAIN}:${DECOY_LOCAL_PORT}/" >/dev/null; then
+        echo "  [ok] local HTTPS probe succeeded"
+      else
+        echo "  [fail] local HTTPS probe failed"
+        failed=1
+      fi
+
+      if [[ -f "${cert_path}" ]] && openssl x509 -in "${cert_path}" -noout -ext subjectAltName 2>/dev/null | grep -Fq "DNS:${DECOY_DOMAIN}"; then
+        echo "  [ok] certificate SAN contains ${DECOY_DOMAIN}"
+      else
+        echo "  [warn] certificate SAN does not contain ${DECOY_DOMAIN}"
+      fi
+      ;;
+    *)
+      die "Неподдерживаемый decoy mode: ${DECOY_MODE}"
+      ;;
+  esac
+
+  if (( failed == 0 )); then
+    echo
+    log "Decoy diagnostics passed"
+  else
+    echo
+    die "Decoy diagnostics failed"
+  fi
+}
+
+migrate_install() {
+  require_root
+
+  if has_manifest; then
+    warn "Manifest уже существует. Выполняю обычный install для актуализации установки."
+    install_all
+    return 0
+  fi
+
+  if [[ ! -f "${LEGACY_SECRET_PATH}" && ! -f "${LEGACY_PROXY_SECRET_PATH}" && ! -f "${LEGACY_PROXY_MULTI_CONF_PATH}" && ! -f "${SERVICE_PATH}" ]]; then
+    die "Legacy installation не найдена: нечего мигрировать"
+  fi
+
+  warn "Запускаю migration install: legacy layout будет импортирован в managed artifact model"
+  install_all
 }
 
 status() {
@@ -1190,6 +1655,13 @@ status() {
   fi
   echo "TLS domain: ${TLS_DOMAIN}"
   echo "Decoy:      ${DECOY_MODE}"
+  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "upstream-forward" ]]; then
+    echo "Decoy upstream: ${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}"
+  elif [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+    echo "Decoy domain: ${DECOY_DOMAIN}"
+    echo "Decoy local:  127.0.0.1:${DECOY_LOCAL_PORT}"
+    echo "Decoy svc:    $(systemctl is-active "${DECOY_SERVICE_NAME}" 2>/dev/null || true)"
+  fi
 
   if [[ "${ENGINE}" == "official" ]]; then
     echo "Timer:      $(systemctl is-active "${REFRESH_TIMER_NAME}" 2>/dev/null || true)"
@@ -1270,6 +1742,27 @@ health() {
           echo "  [fail] decoy target missing"
           failed=1
         fi
+      elif [[ "${DECOY_MODE}" == "local-https" ]]; then
+        if systemctl is-active --quiet "${DECOY_SERVICE_NAME}"; then
+          echo "  [ok] local decoy service active"
+        else
+          echo "  [fail] local decoy service inactive"
+          failed=1
+        fi
+
+        if ss -ltn "( sport = :${DECOY_LOCAL_PORT} )" | tail -n +2 | grep -q "127.0.0.1:${DECOY_LOCAL_PORT}"; then
+          echo "  [ok] local decoy listener present on 127.0.0.1:${DECOY_LOCAL_PORT}"
+        else
+          echo "  [fail] local decoy listener missing on 127.0.0.1:${DECOY_LOCAL_PORT}"
+          failed=1
+        fi
+
+        if curl -sk --resolve "${DECOY_DOMAIN}:${DECOY_LOCAL_PORT}:127.0.0.1" "https://${DECOY_DOMAIN}:${DECOY_LOCAL_PORT}/" >/dev/null; then
+          echo "  [ok] local decoy HTTPS probe succeeded"
+        else
+          echo "  [fail] local decoy HTTPS probe failed"
+          failed=1
+        fi
       else
         echo "  [ok] decoy mode ${DECOY_MODE}"
       fi
@@ -1344,6 +1837,7 @@ rotate_link() {
   (( found == 1 )) || die "Link slot не найден: ${target_name}"
 
   render_engine_runtime_artifacts
+  render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
   apply_engine_runtime_tuning
@@ -1368,6 +1862,7 @@ rotate_all_links() {
   done < "${LINK_DEFINITIONS_PATH}"
 
   render_engine_runtime_artifacts
+  render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
   apply_engine_runtime_tuning
@@ -1388,6 +1883,9 @@ restart_service_command() {
   require_root
   require_installed
   apply_engine_runtime_tuning
+  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+    systemctl restart "${DECOY_SERVICE_NAME}"
+  fi
   systemctl restart "${SERVICE_NAME}"
   status
 }
@@ -1415,6 +1913,7 @@ install_all() {
 
   persist_manifest
   render_engine_runtime_artifacts
+  render_decoy_runtime_artifacts
   build_link_bundle
   render_runner_script
   render_refresh_helper
@@ -1433,12 +1932,13 @@ uninstall_all() {
 
   warn "Останавливаю и удаляю сервисы..."
   systemctl disable --now "${REFRESH_TIMER_NAME}" 2>/dev/null || true
+  systemctl disable --now "${DECOY_SERVICE_NAME}" 2>/dev/null || true
   systemctl disable --now "${SERVICE_NAME}" 2>/dev/null || true
-  rm -f "${SERVICE_PATH}" "${REFRESH_SERVICE_PATH}" "${REFRESH_TIMER_PATH}"
+  rm -f "${SERVICE_PATH}" "${REFRESH_SERVICE_PATH}" "${REFRESH_TIMER_PATH}" "${DECOY_SERVICE_PATH}"
   systemctl daemon-reload
 
   warn "Удаляю бинарники, исходники и helper scripts..."
-  rm -f "${OFFICIAL_BIN_PATH}" "${STEALTH_BIN_PATH}" "${RUNNER_PATH}" "${REFRESH_HELPER_PATH}"
+  rm -f "${OFFICIAL_BIN_PATH}" "${STEALTH_BIN_PATH}" "${RUNNER_PATH}" "${REFRESH_HELPER_PATH}" "${DECOY_SERVER_PATH}"
   rm -rf "${OFFICIAL_SRC_DIR}" "${STEALTH_SRC_DIR}"
 
   warn "Удаляю sysctl workaround..."
@@ -1471,6 +1971,9 @@ Usage:
   sudo bash $0 rotate-link <name>
   sudo bash $0 rotate-all-links
   sudo bash $0 refresh-telegram-config
+  sudo bash $0 check-domain
+  sudo bash $0 test-decoy
+  sudo PUBLIC_DOMAIN=proxy.example.com bash $0 migrate-install
   sudo bash $0 restart
   sudo bash $0 uninstall
 
@@ -1488,9 +1991,13 @@ Environment variables:
   LINK_STRATEGY=bundle|per-device
   DEVICE_NAMES=phone,desktop,tablet
   TLS_DOMAIN=<defaults to PUBLIC_DOMAIN>
-  DECOY_MODE=disabled|upstream-forward
+  DECOY_MODE=disabled|upstream-forward|local-https
   DECOY_TARGET_HOST=<required for DECOY_MODE=upstream-forward>
   DECOY_TARGET_PORT=443
+  DECOY_DOMAIN=<defaults to TLS_DOMAIN for local-https>
+  DECOY_LOCAL_PORT=10443
+  DECOY_CERT_PATH=<optional provided certificate for local-https>
+  DECOY_KEY_PATH=<optional provided private key for local-https>
   OFFICIAL_REPO_URL=${OFFICIAL_REPO_URL_DEFAULT}
   OFFICIAL_REPO_BRANCH=${OFFICIAL_REPO_BRANCH_DEFAULT}
   STEALTH_REPO_URL=${STEALTH_REPO_URL_DEFAULT}
@@ -1501,6 +2008,9 @@ Examples:
   sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth bash $0 install
   sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth LINK_STRATEGY=per-device DEVICE_NAMES=phone,desktop,tablet bash $0 install
   sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth TLS_DOMAIN=cdn.example.com DECOY_MODE=upstream-forward DECOY_TARGET_HOST=site.example.com DECOY_TARGET_PORT=443 bash $0 install
+  sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth DECOY_MODE=local-https DECOY_DOMAIN=www.example.com bash $0 install
+  sudo PUBLIC_DOMAIN=proxy.example.com bash $0 check-domain
+  sudo PUBLIC_DOMAIN=proxy.example.com bash $0 migrate-install
 EOF_USAGE
 }
 
@@ -1523,6 +2033,15 @@ main() {
       ;;
     rotate-all-links)
       rotate_all_links
+      ;;
+    check-domain)
+      check_domain_command
+      ;;
+    test-decoy)
+      test_decoy_command
+      ;;
+    migrate-install)
+      migrate_install
       ;;
     restart)
       restart_service_command
