@@ -1,16 +1,34 @@
-# 🦺 MTProxy Auto Deploy (Ubuntu 24.04)
+# 🦺 MTProxy Private Deploy (Ubuntu 24.04)
 
-Скрипт для быстрой установки и управления Telegram MTProto Proxy на Ubuntu 24.04.
+Скрипт для установки и управления **private MTProto proxy** на Ubuntu 24.04.
+
+Текущая реализация переводит установку на доменно-обязательный контракт и quiet-by-default модель:
+
+- `PUBLIC_DOMAIN` обязателен при первой установке;
+- ссылки и secret не печатаются по умолчанию;
+- создается bundle из нескольких ссылок;
+- есть manifest, link slots, ротация ссылок и daily refresh Telegram config.
+
+> В этой итерации поддержан только `ENGINE=official`.
+> `ENGINE=stealth` пока не реализован и завершится с явной ошибкой.
 
 ---
 
 ## Возможности
 
-- Установка зависимостей и сборка MTProxy из исходников
-- Автоматическая настройка systemd-сервиса
-- Безопасная конфигурация прав доступа
-- Идемпотентная установка (можно запускать повторно)
-- Управление через команды (`install`, `restart`, `status` и др.)
+- установка зависимостей и сборка official MTProxy из исходников;
+- обязательный домен для публичного подключения;
+- persisted deployment manifest;
+- protected artifact layout:
+  - `/etc/mtproxy/config/`
+  - `/etc/mtproxy/secrets/`
+  - `/etc/mtproxy/links/`
+  - `/etc/mtproxy/runtime/`
+- bundle из нескольких ссылок;
+- quiet-by-default install/status;
+- ротация одной ссылки или всех ссылок;
+- автоматический daily refresh `proxy-multi.conf` через systemd timer;
+- health/status команды без штатной печати secret.
 
 ---
 
@@ -18,93 +36,121 @@
 
 - Ubuntu 24.04
 - Root-доступ
+- Домен, указывающий на VPS
 - Открытый TCP-порт (по умолчанию `443`)
 
 ---
 
 ## Установка
 
-### Быстрый запуск одной командой
+### Быстрый запуск
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh | sudo bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh | \
+  sudo PUBLIC_DOMAIN=proxy.example.com bash -s -- install
 ```
 
 ### Надежный вариант в 2 шага
 
-Скачай скрипт:
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh -o install-mtproxy.sh
 chmod +x install-mtproxy.sh
-```
-
-Запусти установку:
-
-```bash
-sudo bash ./install-mtproxy.sh install
+sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh install
 ```
 
 Пример с параметрами:
 
 ```bash
-sudo PORT=443 WORKERS=2 bash ./install-mtproxy.sh install
+sudo PUBLIC_DOMAIN=proxy.example.com PUBLIC_PORT=443 WORKERS=2 bash ./install-mtproxy.sh install
 ```
-
-> Важно: используй именно `raw.githubusercontent.com`, а не GitHub URL вида `.../blob/...`.
-> Скрипт рассчитан на запуск через `bash`, не через `sh`.
 
 ---
 
-## Результат
+## Поведение после установки
 
-После установки будет выведена ссылка подключения:
+После установки скрипт выводит только безопасную сводку:
 
-```text
-tg://proxy?server=IP&port=PORT&secret=SECRET
+- домен;
+- порт;
+- engine;
+- количество сгенерированных links.
+
+Сами `secret` и `tg://` ссылки не печатаются.
+
+Чтобы намеренно открыть bundle:
+
+```bash
+sudo bash ./install-mtproxy.sh share-links
 ```
 
-Используй её в Telegram для подключения к прокси.
+Чтобы увидеть только redacted metadata:
+
+```bash
+sudo bash ./install-mtproxy.sh list-links
+```
 
 ---
 
 ## Команды
 
-### Установка / обновление
+### Установка / обновление структуры
 
 ```bash
-sudo bash ./install-mtproxy.sh install
+sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh install
 ```
 
-### Обновление конфигов Telegram
+### Статус
+
+```bash
+sudo bash ./install-mtproxy.sh status
+```
+
+### Health checks
+
+```bash
+sudo bash ./install-mtproxy.sh health
+```
+
+### Показать ссылки намеренно
+
+```bash
+sudo bash ./install-mtproxy.sh share-links
+```
+
+### Показать список ссылок без раскрытия secret
+
+```bash
+sudo bash ./install-mtproxy.sh list-links
+```
+
+### Ротация одной ссылки
+
+```bash
+sudo bash ./install-mtproxy.sh rotate-link primary-dd
+```
+
+### Ротация всех ссылок
+
+```bash
+sudo bash ./install-mtproxy.sh rotate-all-links
+```
+
+### Обновление Telegram config вручную
+
+```bash
+sudo bash ./install-mtproxy.sh refresh-telegram-config
+```
+
+Совместимый alias:
 
 ```bash
 sudo bash ./install-mtproxy.sh update-config
-```
-
-### Ротация secret
-
-```bash
-sudo bash ./install-mtproxy.sh rotate-secret
 ```
 
 ### Перезапуск
 
 ```bash
 sudo bash ./install-mtproxy.sh restart
-```
-
-### Статус и логи
-
-```bash
-sudo bash ./install-mtproxy.sh status
-```
-
-Или напрямую:
-
-```bash
-systemctl status mtproxy
-journalctl -u mtproxy -f
 ```
 
 ### Удаление
@@ -115,17 +161,24 @@ sudo bash ./install-mtproxy.sh uninstall
 
 ---
 
-## Конфигурация
-
-Переменные окружения:
+## Переменные окружения
 
 | Переменная | По умолчанию | Описание |
 |---|---:|---|
-| `PORT` | `443` | Публичный порт |
-| `INTERNAL_PORT` | `8888` | Внутренний порт |
+| `PUBLIC_DOMAIN` | — | Обязательный публичный домен |
+| `PUBLIC_PORT` | `443` | Публичный порт |
+| `INTERNAL_PORT` | `8888` | Внутренний порт MTProxy |
 | `WORKERS` | `1` | Количество воркеров |
+| `ENGINE` | `official` | Текущий runtime engine |
+| `PRIMARY_PROFILE` | `dd` | Базовый профиль bundle (`dd` или `classic`) |
+| `LINK_STRATEGY` | `bundle` | Стратегия выдачи ссылок |
 | `REPO_URL` | `https://github.com/TelegramMessenger/MTProxy.git` | Репозиторий MTProxy |
 | `REPO_BRANCH` | `master` | Ветка |
+
+Совместимость:
+
+- `PORT` поддержан как alias для `PUBLIC_PORT`;
+- `rotate-secret` сохранен как alias и ротирует первый link slot.
 
 ---
 
@@ -133,9 +186,16 @@ sudo bash ./install-mtproxy.sh uninstall
 
 ```text
 /usr/local/bin/mtproto-proxy
-/etc/mtproxy/
+/usr/local/libexec/mtproxy-run
+/usr/local/libexec/mtproxy-refresh
+/etc/mtproxy/config/
+/etc/mtproxy/secrets/
+/etc/mtproxy/links/
+/etc/mtproxy/runtime/
 /var/lib/mtproxy/
 /etc/systemd/system/mtproxy.service
+/etc/systemd/system/mtproxy-refresh.service
+/etc/systemd/system/mtproxy-refresh.timer
 ```
 
 ---
@@ -145,20 +205,30 @@ sudo bash ./install-mtproxy.sh uninstall
 Порт слушается:
 
 ```bash
-sudo ss -ltnp 'sport = :443'
+sudo ss -ltn '( sport = :443 )'
+```
+
+Таймер обновления:
+
+```bash
+sudo systemctl status mtproxy-refresh.timer --no-pager
 ```
 
 Логи:
 
 ```bash
-sudo journalctl -u mtproxy -n 100 --no-pager
+sudo journalctl -u mtproxy.service -n 100 --no-pager
 ```
 
-Статус сервиса:
+---
 
-```bash
-sudo systemctl status mtproxy.service --no-pager -l
-```
+## Ограничения текущей итерации
+
+- stealth engine пока не интегрирован;
+- `ee` / Fake TLS и decoy contour пока не реализованы;
+- `per-device` strategy пока не реализована.
+
+То есть сейчас закрыта безопасная foundation-итерация для official runtime: install contract, artifact model, multi-link management и automated refresh.
 
 ---
 
