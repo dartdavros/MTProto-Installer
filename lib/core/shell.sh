@@ -6,5 +6,5 @@ require_root() {
 
 require_installed() {
   [[ -f "${MANIFEST_PATH}" ]] || die "Установка не найдена: отсутствует ${MANIFEST_PATH}"
-  load_manifest
+  load_runtime_context
 }

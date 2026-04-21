@@ -1,10 +1,21 @@
 # shellcheck shell=bash
 
 check_domain_command() {
-  read_manifest_contract
+  local domain tls_domain
 
-  local domain="${REQUESTED_PUBLIC_DOMAIN:-${MANIFEST_PUBLIC_DOMAIN:-}}"
-  local tls_domain="${REQUESTED_TLS_DOMAIN:-${MANIFEST_TLS_DOMAIN:-}}"
+  if [[ -n "${REQUESTED_PUBLIC_DOMAIN:-}" || -n "${REQUESTED_TLS_DOMAIN:-}" ]]; then
+    read_manifest_contract
+    domain="${REQUESTED_PUBLIC_DOMAIN:-${MANIFEST_PUBLIC_DOMAIN:-}}"
+    tls_domain="${REQUESTED_TLS_DOMAIN:-${MANIFEST_TLS_DOMAIN:-}}"
+  elif has_manifest; then
+    load_runtime_context
+    domain="${PUBLIC_DOMAIN}"
+    tls_domain="${TLS_DOMAIN}"
+  else
+    read_manifest_contract
+    domain="${MANIFEST_PUBLIC_DOMAIN:-}"
+    tls_domain="${MANIFEST_TLS_DOMAIN:-}"
+  fi
 
   [[ -n "${domain}" ]] || die "Укажи PUBLIC_DOMAIN либо выполни команду на установленной системе"
 

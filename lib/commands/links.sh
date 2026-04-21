@@ -40,7 +40,7 @@ rotate_link() {
 
   (( found == 1 )) || die "Link slot не найден: ${target_name}"
 
-  render_engine_runtime_artifacts
+  engine_render_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
@@ -65,7 +65,7 @@ rotate_all_links() {
     printf '%s\n' "${desired_value}" > "${secret_file}"
   done < "${LINK_DEFINITIONS_PATH}"
 
-  render_engine_runtime_artifacts
+  engine_render_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions

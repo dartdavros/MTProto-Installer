@@ -70,7 +70,7 @@ engine_runtime_artifacts_present() {
   esac
 }
 
-build_engine_binary() {
+engine_build_binary() {
   case "${ENGINE}" in
     official)
       official_build_engine_binary
@@ -88,7 +88,7 @@ build_engine_binary() {
   fi
 }
 
-render_engine_runtime_artifacts() {
+engine_render_runtime_artifacts() {
   case "${ENGINE}" in
     official)
       official_render_runtime_artifacts
@@ -100,4 +100,13 @@ render_engine_runtime_artifacts() {
       die "Неизвестный engine: ${ENGINE}"
       ;;
   esac
+}
+
+
+build_engine_binary() {
+  engine_build_binary "$@"
+}
+
+render_engine_runtime_artifacts() {
+  engine_render_runtime_artifacts "$@"
 }
