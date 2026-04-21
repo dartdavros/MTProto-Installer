@@ -134,10 +134,32 @@ public_domain_health_check() {
   domain_matches_local_host "${PUBLIC_DOMAIN}"
 }
 
+refresh_observability_healthy() {
+  if ! engine_requires_telegram_upstream; then
+    return 0
+  fi
+
+  if ! refresh_next_scheduled; then
+    return 1
+  fi
+
+  if ! refresh_has_recorded_attempt; then
+    return 0
+  fi
+
+  refresh_last_result_successful || return 1
+  refresh_success_is_stale && return 1
+
+  return 0
+}
+
 health() {
   require_installed
 
   local failed=0
+  local refresh_last="n/a"
+  local refresh_next="n/a"
+  local refresh_result="n/a"
 
   echo "Health checks:"
   if systemctl is-active --quiet "${SERVICE_NAME}"; then
@@ -181,6 +203,37 @@ health() {
     else
       echo "  [fail] refresh timer disabled"
       failed=1
+    fi
+
+    refresh_last="$(refresh_last_attempt_human)"
+    refresh_next="$(refresh_next_human)"
+    refresh_result="$(refresh_last_result)"
+
+    if refresh_next_scheduled; then
+      echo "  [ok] refresh next run scheduled (${refresh_next})"
+    else
+      echo "  [fail] refresh next run is not scheduled"
+      failed=1
+    fi
+
+    if refresh_has_recorded_attempt; then
+      echo "  [ok] refresh last run recorded (${refresh_last})"
+
+      if refresh_last_result_successful; then
+        echo "  [ok] refresh last result is success"
+      else
+        echo "  [fail] refresh last result is ${refresh_result}"
+        failed=1
+      fi
+
+      if refresh_success_is_stale; then
+        echo "  [fail] refresh last successful run is stale"
+        failed=1
+      else
+        echo "  [ok] refresh last successful run is fresh enough"
+      fi
+    else
+      echo "  [ok] refresh has not run yet; first scheduled execution is pending"
     fi
   fi
 

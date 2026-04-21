@@ -12,6 +12,7 @@ apply_permissions() {
   [[ -f "${STEALTH_CONFIG_PATH}" ]] && chown root:"${RUN_GROUP}" "${STEALTH_CONFIG_PATH}" && chmod 0640 "${STEALTH_CONFIG_PATH}"
   [[ -f "${LINK_DEFINITIONS_PATH}" ]] && chown root:"${RUN_GROUP}" "${LINK_DEFINITIONS_PATH}" && chmod 0640 "${LINK_DEFINITIONS_PATH}"
   [[ -f "${LINK_BUNDLE_PATH}" ]] && chown root:"${RUN_GROUP}" "${LINK_BUNDLE_PATH}" && chmod 0640 "${LINK_BUNDLE_PATH}"
+  [[ -f "${REFRESH_STATE_PATH}" ]] && chown root:"${RUN_GROUP}" "${REFRESH_STATE_PATH}" && chmod 0640 "${REFRESH_STATE_PATH}"
   [[ -f "${DECOY_MANAGED_CERT_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_MANAGED_CERT_PATH}" && chmod 0640 "${DECOY_MANAGED_CERT_PATH}"
   [[ -f "${DECOY_MANAGED_KEY_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_MANAGED_KEY_PATH}" && chmod 0640 "${DECOY_MANAGED_KEY_PATH}"
 

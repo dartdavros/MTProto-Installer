@@ -52,6 +52,7 @@ sensitive_artifacts_secure() {
   check_optional_path_contract "${PROXY_SECRET_PATH}" "640" "root:${RUN_GROUP}" || return 1
   check_optional_path_contract "${PROXY_MULTI_CONF_PATH}" "640" "root:${RUN_GROUP}" || return 1
   check_optional_path_contract "${STEALTH_CONFIG_PATH}" "640" "root:${RUN_GROUP}" || return 1
+  check_optional_path_contract "${REFRESH_STATE_PATH}" "640" "root:${RUN_GROUP}" || return 1
   check_optional_path_contract "${DECOY_MANAGED_CERT_PATH}" "640" "root:${RUN_GROUP}" || return 1
   check_optional_path_contract "${DECOY_MANAGED_KEY_PATH}" "640" "root:${RUN_GROUP}" || return 1
   check_optional_path_contract "${RUNNER_PATH}" "750" "root:${RUN_GROUP}" || return 1
@@ -154,6 +155,23 @@ refresh_command_operable() {
   fi
 }
 
+refresh_acceptance_healthy() {
+  if ! engine_requires_telegram_upstream; then
+    return 0
+  fi
+
+  if ! refresh_contract_valid; then
+    return 1
+  fi
+
+  if refresh_has_recorded_attempt; then
+    refresh_last_result_successful || return 1
+    refresh_success_is_stale && return 1
+  fi
+
+  return 0
+}
+
 acceptance_smoke() {
   require_root
   require_installed
@@ -217,6 +235,17 @@ acceptance_smoke() {
         echo "  [ok] refresh-telegram-config command executed successfully"
       else
         echo "  [ok] refresh contract is present (set ACCEPTANCE_RUN_REFRESH=1 for active check)"
+      fi
+
+      if refresh_acceptance_healthy; then
+        if refresh_has_recorded_attempt; then
+          echo "  [ok] refresh observability is healthy"
+        else
+          echo "  [ok] refresh observability pending first successful run"
+        fi
+      else
+        echo "  [fail] refresh observability is unhealthy"
+        failed=1
       fi
     else
       echo "  [ok] refresh-telegram-config is not required for this engine"

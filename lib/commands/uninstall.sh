@@ -4,6 +4,7 @@ uninstall_all() {
   require_root
 
   warn "Останавливаю и удаляю сервисы..."
+  remove_managed_firewall_policy
   systemctl disable --now "${REFRESH_TIMER_NAME}" 2>/dev/null || true
   systemctl disable --now "${DECOY_SERVICE_NAME}" 2>/dev/null || true
   systemctl disable --now "${SERVICE_NAME}" 2>/dev/null || true

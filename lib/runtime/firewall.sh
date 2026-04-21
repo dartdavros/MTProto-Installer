@@ -26,6 +26,12 @@ ufw_deny_tcp_port() {
   ufw deny "${port}/tcp" >/dev/null 2>&1 || true
 }
 
+ufw_delete_deny_tcp_port() {
+  local port="$1"
+  [[ -n "${port}" ]] || return 0
+  ufw --force delete deny "${port}/tcp" >/dev/null 2>&1 || true
+}
+
 firewall_can_manage_local_only_port() {
   local port="$1"
 
@@ -99,6 +105,35 @@ configure_firewall() {
     if firewall_can_manage_local_only_port "${port}"; then
       info "Ограничиваю loopback-only port ${port}/tcp"
       ufw_deny_tcp_port "${port}"
+    fi
+  done
+}
+
+remove_managed_firewall_policy() {
+  local managed_local_only_ports=("${INTERNAL_PORT}" "9091")
+  local port
+  local seen=" "
+
+  if ! ufw_available || ! ufw_active; then
+    return 0
+  fi
+
+  info "Удаляю managed firewall policy..."
+  ufw_delete_allow_tcp_port "${PUBLIC_PORT}"
+
+  if [[ "${DECOY_MODE}" == "local-https" ]]; then
+    managed_local_only_ports+=("${DECOY_LOCAL_PORT}")
+  fi
+
+  for port in "${managed_local_only_ports[@]}"; do
+    [[ -n "${port}" ]] || continue
+    if [[ "${seen}" == *" ${port} "* ]]; then
+      continue
+    fi
+    seen+="${port} "
+
+    if firewall_can_manage_local_only_port "${port}"; then
+      ufw_delete_deny_tcp_port "${port}"
     fi
   done
 }

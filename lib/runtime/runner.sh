@@ -43,11 +43,54 @@ set -Eeuo pipefail
 # shellcheck disable=SC1090
 source "__MANIFEST_PATH__"
 
+LAST_ATTEMPT_EPOCH="$(date +%s)"
+LAST_ATTEMPT_HUMAN="$(date -d "@${LAST_ATTEMPT_EPOCH}" "+%Y-%m-%d %H:%M:%S %Z")"
+LAST_RESULT="unknown"
+LAST_SUCCESS_EPOCH=""
+LAST_SUCCESS_HUMAN=""
+
+if [[ -f "${REFRESH_STATE_PATH}" ]]; then
+  # shellcheck disable=SC1090
+  source "${REFRESH_STATE_PATH}" || true
+  LAST_SUCCESS_EPOCH="${LAST_SUCCESS_EPOCH:-}"
+  LAST_SUCCESS_HUMAN="${LAST_SUCCESS_HUMAN:-}"
+fi
+
+persist_refresh_state() {
+  {
+    printf "LAST_ATTEMPT_EPOCH=%q\n" "${LAST_ATTEMPT_EPOCH}"
+    printf "LAST_ATTEMPT_HUMAN=%q\n" "${LAST_ATTEMPT_HUMAN}"
+    printf "LAST_RESULT=%q\n" "${LAST_RESULT}"
+    printf "LAST_SUCCESS_EPOCH=%q\n" "${LAST_SUCCESS_EPOCH}"
+    printf "LAST_SUCCESS_HUMAN=%q\n" "${LAST_SUCCESS_HUMAN}"
+  } > "${REFRESH_STATE_PATH}"
+
+  chown root:"__RUN_GROUP__" "${REFRESH_STATE_PATH}"
+  chmod 0640 "${REFRESH_STATE_PATH}"
+}
+
+finalize_refresh_state() {
+  local rc=$?
+
+  if (( rc == 0 )); then
+    LAST_RESULT="success"
+    LAST_SUCCESS_EPOCH="${LAST_ATTEMPT_EPOCH}"
+    LAST_SUCCESS_HUMAN="${LAST_ATTEMPT_HUMAN}"
+  elif [[ "${LAST_RESULT}" == "unknown" ]]; then
+    LAST_RESULT="failure"
+  fi
+
+  persist_refresh_state
+  exit ${rc}
+}
+
+trap finalize_refresh_state EXIT
+
 case "${ENGINE}" in
   official)
     tmp_secret="$(mktemp)"
     tmp_conf="$(mktemp)"
-    trap 'rm -f "${tmp_secret}" "${tmp_conf}"' EXIT
+    trap 'rm -f "${tmp_secret}" "${tmp_conf}"; finalize_refresh_state' EXIT
 
     curl -fsSL https://core.telegram.org/getProxySecret -o "${tmp_secret}"
     curl -fsSL https://core.telegram.org/getProxyConfig -o "${tmp_conf}"
@@ -58,6 +101,7 @@ case "${ENGINE}" in
     systemctl restart "${SERVICE_NAME}"
     ;;
   stealth)
+    LAST_RESULT="not-required"
     echo "refresh-telegram-config не требуется для ENGINE=stealth" >&2
     ;;
   *)
