@@ -4,10 +4,7 @@ restart_service_command() {
   require_root
   require_installed
   apply_engine_runtime_tuning
-  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
-    systemctl restart "${DECOY_SERVICE_NAME}"
-  fi
-  systemctl restart "${SERVICE_NAME}"
+  restart_managed_services
   status
 }
 

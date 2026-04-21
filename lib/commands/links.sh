@@ -9,7 +9,7 @@ refresh_telegram_config() {
       download_proxy_files
       apply_permissions
       apply_engine_runtime_tuning
-      systemctl restart "${SERVICE_NAME}"
+      restart_managed_services
       log "Конфиг Telegram обновлен"
       ;;
     stealth)
@@ -48,7 +48,7 @@ rotate_link() {
   build_link_bundle
   apply_permissions
   apply_engine_runtime_tuning
-  systemctl restart "${SERVICE_NAME}"
+  restart_managed_services
 
   log "Link ${target_name} обновлен"
 }
@@ -73,7 +73,7 @@ rotate_all_links() {
   build_link_bundle
   apply_permissions
   apply_engine_runtime_tuning
-  systemctl restart "${SERVICE_NAME}"
+  restart_managed_services
 
   log "Все link slots обновлены"
 }

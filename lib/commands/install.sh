@@ -45,7 +45,7 @@ install_all() {
   migrate_legacy_layout_if_present
   ensure_link_secrets
 
-  if [[ "${ENGINE}" == "official" ]]; then
+  if engine_requires_telegram_upstream; then
     if [[ ! -f "${PROXY_SECRET_PATH}" || ! -f "${PROXY_MULTI_CONF_PATH}" ]]; then
       download_proxy_files
     else
@@ -65,7 +65,7 @@ install_all() {
   apply_engine_runtime_tuning
   reload_and_enable_units
   configure_firewall
-  start_service
+  start_managed_services
   show_post_install_summary
 }
 
