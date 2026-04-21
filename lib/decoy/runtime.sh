@@ -130,7 +130,7 @@ EOF_DECOY_SERVICE
 }
 
 render_decoy_runtime_artifacts() {
-  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+  if engine_uses_local_decoy_service; then
     ensure_decoy_tls_material
     write_decoy_site_content
     render_decoy_server_script
@@ -142,20 +142,16 @@ render_decoy_runtime_artifacts() {
 
 effective_decoy_cert_path() {
   if [[ -f "${DECOY_MANAGED_CERT_PATH}" ]]; then
-    printf '%s
-' "${DECOY_MANAGED_CERT_PATH}"
+    printf '%s\n' "${DECOY_MANAGED_CERT_PATH}"
   else
-    printf '%s
-' "${DECOY_CERT_SOURCE_PATH}"
+    printf '%s\n' "${DECOY_CERT_SOURCE_PATH}"
   fi
 }
 
 effective_decoy_key_path() {
   if [[ -f "${DECOY_MANAGED_KEY_PATH}" ]]; then
-    printf '%s
-' "${DECOY_MANAGED_KEY_PATH}"
+    printf '%s\n' "${DECOY_MANAGED_KEY_PATH}"
   else
-    printf '%s
-' "${DECOY_KEY_SOURCE_PATH}"
+    printf '%s\n' "${DECOY_KEY_SOURCE_PATH}"
   fi
 }

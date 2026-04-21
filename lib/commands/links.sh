@@ -11,7 +11,7 @@ refresh_telegram_config() {
     restart_managed_services
     log "Конфиг Telegram обновлен"
   else
-    warn "refresh-telegram-config не требуется для ENGINE=stealth"
+    warn "refresh-telegram-config не требуется для ENGINE=${ENGINE}"
   fi
 }
 
@@ -40,7 +40,7 @@ rotate_link() {
 
   (( found == 1 )) || die "Link slot не найден: ${target_name}"
 
-  engine_render_runtime_artifacts
+  render_engine_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
@@ -65,7 +65,7 @@ rotate_all_links() {
     printf '%s\n' "${desired_value}" > "${secret_file}"
   done < "${LINK_DEFINITIONS_PATH}"
 
-  engine_render_runtime_artifacts
+  render_engine_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
@@ -92,6 +92,7 @@ share_links() {
 }
 
 list_links() {
+  require_root
   require_installed
 
   echo "Links (redacted):"

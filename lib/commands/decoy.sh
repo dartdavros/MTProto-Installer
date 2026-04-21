@@ -1,21 +1,5 @@
 # shellcheck shell=bash
 
-print_decoy_summary_lines() {
-  if ! engine_supports_decoy; then
-    return 0
-  fi
-
-  case "${DECOY_MODE}" in
-    upstream-forward)
-      echo "Decoy upstream: ${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}"
-      ;;
-    local-https)
-      echo "Decoy domain: ${DECOY_DOMAIN}"
-      echo "Decoy local:  127.0.0.1:${DECOY_LOCAL_PORT}"
-      ;;
-  esac
-}
-
 test_decoy_command() {
   require_installed
 

@@ -13,10 +13,18 @@ status() {
   fi
   echo "TLS domain: ${TLS_DOMAIN}"
   echo "Decoy:      ${DECOY_MODE}"
-  print_decoy_summary_lines
 
-  if engine_uses_local_decoy_service; then
-    echo "Decoy svc:    $(systemctl is-active "${DECOY_SERVICE_NAME}" 2>/dev/null || true)"
+  if engine_supports_decoy; then
+    case "${DECOY_MODE}" in
+      upstream-forward)
+        echo "Decoy upstream: ${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}"
+        ;;
+      local-https)
+        echo "Decoy domain: ${DECOY_DOMAIN}"
+        echo "Decoy local:  127.0.0.1:${DECOY_LOCAL_PORT}"
+        echo "Decoy svc:    $(systemctl is-active "${DECOY_SERVICE_NAME}" 2>/dev/null || true)"
+        ;;
+    esac
   fi
 
   if engine_requires_telegram_upstream; then

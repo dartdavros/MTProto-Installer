@@ -56,7 +56,21 @@ engine_uses_local_decoy_service() {
   engine_supports_decoy && [[ "${DECOY_MODE}" == "local-https" ]]
 }
 
-engine_build_binary() {
+engine_runtime_artifacts_present() {
+  case "${ENGINE}" in
+    official)
+      [[ -f "${PROXY_SECRET_PATH}" && -f "${PROXY_MULTI_CONF_PATH}" && -x "${OFFICIAL_BIN_PATH}" ]]
+      ;;
+    stealth)
+      [[ -f "${STEALTH_CONFIG_PATH}" && -x "${STEALTH_BIN_PATH}" ]]
+      ;;
+    *)
+      die "Неизвестный engine: ${ENGINE}"
+      ;;
+  esac
+}
+
+build_engine_binary() {
   case "${ENGINE}" in
     official)
       official_build_engine_binary
@@ -74,27 +88,13 @@ engine_build_binary() {
   fi
 }
 
-engine_render_runtime_artifacts() {
+render_engine_runtime_artifacts() {
   case "${ENGINE}" in
     official)
       official_render_runtime_artifacts
       ;;
     stealth)
       stealth_render_runtime_artifacts
-      ;;
-    *)
-      die "Неизвестный engine: ${ENGINE}"
-      ;;
-  esac
-}
-
-engine_runtime_artifacts_present() {
-  case "${ENGINE}" in
-    official)
-      official_runtime_artifacts_present
-      ;;
-    stealth)
-      stealth_runtime_artifacts_present
       ;;
     *)
       die "Неизвестный engine: ${ENGINE}"
