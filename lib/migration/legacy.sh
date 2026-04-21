@@ -25,6 +25,8 @@ populate_contract_from_legacy_service_if_needed() {
   [[ -f "${MANIFEST_PATH}" ]] && return 0
   [[ -f "${SERVICE_PATH}" ]] || return 0
 
+  read_requested_contract
+
   legacy_public_port="$(parse_legacy_service_exec_flag '-H' || true)"
   legacy_internal_port="$(parse_legacy_service_exec_flag '-p' || true)"
   legacy_workers="$(parse_legacy_service_exec_flag '-M' || true)"

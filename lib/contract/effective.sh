@@ -85,6 +85,7 @@ hydrate_effective_contract() {
 
   case "${requested_enabled}" in
     yes)
+      read_requested_contract
       requested_engine="${REQUESTED_ENGINE:-}"
       requested_public_domain="${REQUESTED_PUBLIC_DOMAIN:-}"
       requested_public_port="${REQUESTED_PUBLIC_PORT:-}"

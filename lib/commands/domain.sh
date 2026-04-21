@@ -3,7 +3,7 @@
 check_domain_command() {
   local domain tls_domain
 
-  if [[ -n "${REQUESTED_PUBLIC_DOMAIN:-}" || -n "${REQUESTED_TLS_DOMAIN:-}" ]]; then
+  if requested_domain_inputs_present; then
     read_manifest_contract
     domain="${REQUESTED_PUBLIC_DOMAIN:-${MANIFEST_PUBLIC_DOMAIN:-}}"
     tls_domain="${REQUESTED_TLS_DOMAIN:-${MANIFEST_TLS_DOMAIN:-}}"
