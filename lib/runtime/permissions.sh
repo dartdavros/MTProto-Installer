@@ -26,5 +26,26 @@ apply_permissions() {
   [[ -f "${DECOY_SERVER_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_SERVER_PATH}" && chmod 0750 "${DECOY_SERVER_PATH}"
 
   chown -R "${RUN_USER}:${RUN_GROUP}" "${STATE_DIR}"
-  chmod 750 "${STATE_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
+  chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"
+  chmod 750 "${STATE_DIR}" "${ROTATION_BACKUPS_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
+
+  if [[ -d "${ROTATION_BACKUPS_DIR}" ]]; then
+    find "${ROTATION_BACKUPS_DIR}" -mindepth 1 -type d -exec chown root:"${RUN_GROUP}" {} +
+    find "${ROTATION_BACKUPS_DIR}" -mindepth 1 -type d -exec chmod 750 {} +
+  fi
+
+  if compgen -G "${ROTATION_BACKUPS_DIR}/*/metadata.env" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"/*/metadata.env
+    chmod 0640 "${ROTATION_BACKUPS_DIR}"/*/metadata.env
+  fi
+
+  if compgen -G "${ROTATION_BACKUPS_DIR}/*/links/*" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"/*/links/*
+    chmod 0640 "${ROTATION_BACKUPS_DIR}"/*/links/*
+  fi
+
+  if compgen -G "${ROTATION_BACKUPS_DIR}/*/secrets/*.secret" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"/*/secrets/*.secret
+    chmod 0640 "${ROTATION_BACKUPS_DIR}"/*/secrets/*.secret
+  fi
 }

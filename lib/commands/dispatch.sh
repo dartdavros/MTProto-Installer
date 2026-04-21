@@ -27,6 +27,12 @@ main() {
     rotate-all-links)
       rotate_all_links
       ;;
+    list-rotation-backups)
+      list_rotation_backups
+      ;;
+    restore-rotation-backup)
+      restore_rotation_backup "${arg}"
+      ;;
     check-domain)
       check_domain_command
       ;;

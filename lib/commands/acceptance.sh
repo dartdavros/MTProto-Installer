@@ -44,6 +44,7 @@ sensitive_artifacts_secure() {
   check_path_contract "${LINKS_DIR}" "750" "root:${RUN_GROUP}" "links dir" || return 1
   check_path_contract "${RUNTIME_DIR}" "750" "root:${RUN_GROUP}" "runtime dir" || return 1
   check_path_contract "${STATE_DIR}" "750" "${RUN_USER}:${RUN_GROUP}" "state dir" || return 1
+  check_path_contract "${ROTATION_BACKUPS_DIR}" "750" "root:${RUN_GROUP}" "rotation backups dir" || return 1
 
   check_path_contract "${MANIFEST_PATH}" "640" "root:${RUN_GROUP}" "manifest" || return 1
   check_path_contract "${LINK_DEFINITIONS_PATH}" "640" "root:${RUN_GROUP}" "link definitions" || return 1
@@ -64,6 +65,14 @@ sensitive_artifacts_secure() {
   while IFS= read -r -d '' secret_file; do
     check_path_contract "${secret_file}" "640" "root:${RUN_GROUP}" "secret slot" || return 1
   done < <(find "${SECRETS_DIR}" -maxdepth 1 -type f -name '*.secret' -print0 | sort -z)
+
+  while IFS= read -r -d '' secret_file; do
+    check_path_contract "${secret_file}" "640" "root:${RUN_GROUP}" "rotation backup secret" || return 1
+  done < <(find "${ROTATION_BACKUPS_DIR}" -mindepth 2 -maxdepth 3 -type f -name '*.secret' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' metadata_file; do
+    check_path_contract "${metadata_file}" "640" "root:${RUN_GROUP}" "rotation backup metadata" || return 1
+  done < <(find "${ROTATION_BACKUPS_DIR}" -mindepth 2 -maxdepth 2 -type f -name 'metadata.env' -print0 2>/dev/null | sort -z)
 
   return 0
 }
@@ -172,6 +181,26 @@ refresh_acceptance_healthy() {
   return 0
 }
 
+active_rotation_smoke() {
+  local first_name secret_file before_raw after_raw restored_raw
+
+  first_name="$(awk 'NR==1 {print $1}' "${LINK_DEFINITIONS_PATH}")"
+  [[ -n "${first_name}" ]] || return 1
+
+  secret_file="$(secret_file_for_name "${first_name}")"
+  before_raw="$(extract_raw_secret_hex "$(normalize_secret "${secret_file}")")"
+
+  rotate_link "${first_name}" >/dev/null
+  after_raw="$(extract_raw_secret_hex "$(normalize_secret "${secret_file}")")"
+  [[ -n "${after_raw}" && "${after_raw}" != "${before_raw}" ]] || return 1
+
+  restore_rotation_backup latest >/dev/null
+  restored_raw="$(extract_raw_secret_hex "$(normalize_secret "${secret_file}")")"
+  [[ "${restored_raw}" == "${before_raw}" ]] || return 1
+
+  rotation_runtime_healthy
+}
+
 acceptance_smoke() {
   require_root
   require_installed
@@ -227,6 +256,17 @@ acceptance_smoke() {
   else
     echo "  [fail] share-links command failed"
     failed=1
+  fi
+
+  if [[ "${ACCEPTANCE_RUN_ROTATION:-0}" == "1" ]]; then
+    if active_rotation_smoke; then
+      echo "  [ok] transactional rotation + rollback smoke passed"
+    else
+      echo "  [fail] transactional rotation + rollback smoke failed"
+      failed=1
+    fi
+  else
+    echo "  [ok] transactional rotation smoke skipped (set ACCEPTANCE_RUN_ROTATION=1 for active check)"
   fi
 
   if refresh_command_operable; then

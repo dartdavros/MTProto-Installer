@@ -50,6 +50,7 @@ ensure_user_and_dirs() {
     "${LINKS_DIR}" \
     "${RUNTIME_DIR}" \
     "${STATE_DIR}" \
+    "${ROTATION_BACKUPS_DIR}" \
     "${LIBEXEC_DIR}" \
     "${STEALTH_TLS_FRONT_DIR}" \
     "${DECOY_CONFIG_DIR}" \
@@ -60,7 +61,8 @@ ensure_user_and_dirs() {
   chmod 750 "${CONFIG_ROOT}" "${MANIFEST_DIR}" "${SECRETS_DIR}" "${LINKS_DIR}" "${RUNTIME_DIR}" "${DECOY_CONFIG_DIR}" "${DECOY_CERT_DIR}"
 
   chown -R "${RUN_USER}:${RUN_GROUP}" "${STATE_DIR}"
-  chmod 750 "${STATE_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
+  chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"
+  chmod 750 "${STATE_DIR}" "${ROTATION_BACKUPS_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
 }
 
 clone_or_update_engine_repo() {

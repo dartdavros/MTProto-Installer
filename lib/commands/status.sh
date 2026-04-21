@@ -12,6 +12,10 @@ status() {
   print_runtime_summary_lines \
     "$(systemctl is-active "${SERVICE_NAME}" 2>/dev/null || true)" \
     "${timer_state}"
+  echo "Rotation backups: $(rotation_backup_count)"
+  if latest_rotation_backup_id >/dev/null 2>&1; then
+    echo "Last backup: $(latest_rotation_backup_id)"
+  fi
 
   echo
   echo "Links (redacted):"
