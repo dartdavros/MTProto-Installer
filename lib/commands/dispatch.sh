@@ -45,6 +45,9 @@ main() {
     health)
       health
       ;;
+    acceptance-smoke)
+      acceptance_smoke
+      ;;
     share-links)
       share_links
       ;;

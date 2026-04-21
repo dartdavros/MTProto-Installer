@@ -49,6 +49,7 @@ source_lib "lib/commands/health.sh"
 source_lib "lib/commands/status.sh"
 source_lib "lib/commands/links.sh"
 source_lib "lib/commands/uninstall.sh"
+source_lib "lib/commands/acceptance.sh"
 source_lib "lib/commands/help.sh"
 source_lib "lib/commands/dispatch.sh"
 

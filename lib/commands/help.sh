@@ -6,7 +6,9 @@ Usage:
   sudo PUBLIC_DOMAIN=proxy.example.com bash $0 install
   sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth bash $0 install
   sudo bash $0 status
+  sudo bash $0 acceptance-smoke
   sudo bash $0 health
+  sudo bash $0 acceptance-smoke
   sudo bash $0 list-links
   sudo bash $0 share-links
   sudo bash $0 rotate-link <name>

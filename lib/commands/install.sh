@@ -1,7 +1,19 @@
 # shellcheck shell=bash
 
 install_all() {
+  local previous_public_port=""
+  local previous_internal_port=""
+  local previous_decoy_local_port=""
+
   require_root
+
+  if has_manifest; then
+    read_manifest_contract
+    previous_public_port="${MANIFEST_PUBLIC_PORT:-}"
+    previous_internal_port="${MANIFEST_INTERNAL_PORT:-}"
+    previous_decoy_local_port="${MANIFEST_DECOY_LOCAL_PORT:-}"
+  fi
+
   resolve_install_contract
   validate_install_contract
   run_install_preflight_checks
@@ -31,7 +43,7 @@ install_all() {
   apply_permissions
   apply_engine_runtime_tuning
   reload_and_enable_units
-  configure_firewall
+  configure_firewall "${previous_public_port}" "${previous_internal_port}" "${previous_decoy_local_port}"
   start_managed_services
   show_post_install_summary
 }

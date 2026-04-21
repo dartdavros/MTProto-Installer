@@ -32,6 +32,52 @@ service_unit_consistent() {
   grep -Fq "source \"${MANIFEST_PATH}\"" "${RUNNER_PATH}" || return 1
 }
 
+listener_addresses_for_port() {
+  local port="$1"
+  ss -ltnH "( sport = :${port} )" 2>/dev/null | awk '{print $4}'
+}
+
+listener_is_loopback_address() {
+  local address="$1"
+
+  case "${address}" in
+    127.0.0.1:*|\[::1\]:*|::1:*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+port_has_non_loopback_listener() {
+  local port="$1"
+  local address
+
+  while IFS= read -r address; do
+    [[ -n "${address}" ]] || continue
+    if ! listener_is_loopback_address "${address}"; then
+      return 0
+    fi
+  done < <(listener_addresses_for_port "${port}")
+
+  return 1
+}
+
+port_has_loopback_only_listener() {
+  local port="$1"
+  local address
+  local found=0
+
+  while IFS= read -r address; do
+    [[ -n "${address}" ]] || continue
+    found=1
+    listener_is_loopback_address "${address}" || return 1
+  done < <(listener_addresses_for_port "${port}")
+
+  (( found == 1 ))
+}
+
 stealth_runtime_consistent() {
   [[ -f "${STEALTH_CONFIG_PATH}" ]] || return 1
   grep -Fq "public_host = \"${PUBLIC_DOMAIN}\"" "${STEALTH_CONFIG_PATH}" || return 1
@@ -160,6 +206,13 @@ health() {
   fi
 
   if engine_supports_decoy; then
+    if port_has_non_loopback_listener "9091"; then
+      echo "  [fail] stealth API port 9091/tcp is exposed publicly"
+      failed=1
+    else
+      echo "  [ok] stealth API port 9091/tcp is not exposed publicly"
+    fi
+
     case "${DECOY_MODE}" in
       upstream-forward)
         if [[ -n "${DECOY_TARGET_HOST}" ]]; then
@@ -177,10 +230,10 @@ health() {
           failed=1
         fi
 
-        if ss -ltn "( sport = :${DECOY_LOCAL_PORT} )" | tail -n +2 | grep -q "127.0.0.1:${DECOY_LOCAL_PORT}"; then
-          echo "  [ok] local decoy listener present on 127.0.0.1:${DECOY_LOCAL_PORT}"
+        if port_has_loopback_only_listener "${DECOY_LOCAL_PORT}"; then
+          echo "  [ok] local decoy listener is loopback-only on ${DECOY_LOCAL_PORT}/tcp"
         else
-          echo "  [fail] local decoy listener missing on 127.0.0.1:${DECOY_LOCAL_PORT}"
+          echo "  [fail] local decoy listener is missing or exposed publicly"
           failed=1
         fi
 
