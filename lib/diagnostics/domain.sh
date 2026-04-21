@@ -1,5 +1,33 @@
 # shellcheck shell=bash
 
+domain_resolved_ips() {
+  local domain="$1"
+  collect_domain_candidates "${domain}" | collect_unique_lines
+}
+
+domain_local_global_ips() {
+  collect_local_global_ips | collect_unique_lines
+}
+
+domain_matches_local_host() {
+  local domain="$1"
+  local resolved_ips local_ips line
+
+  resolved_ips="$(domain_resolved_ips "${domain}")"
+  local_ips="$(domain_local_global_ips)"
+
+  [[ -n "${resolved_ips}" && -n "${local_ips}" ]] || return 1
+
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    if line_in_block "${line}" "${local_ips}"; then
+      return 0
+    fi
+  done <<< "${resolved_ips}"
+
+  return 1
+}
+
 print_domain_diagnostics() {
   local domain="$1"
   local label="$2"
@@ -7,8 +35,8 @@ print_domain_diagnostics() {
 
   validate_domain "${domain}"
 
-  resolved_ips="$(collect_domain_candidates "${domain}" | collect_unique_lines)"
-  local_ips="$(collect_local_global_ips | collect_unique_lines)"
+  resolved_ips="$(domain_resolved_ips "${domain}")"
+  local_ips="$(domain_local_global_ips)"
 
   echo "${label}: ${domain}"
 

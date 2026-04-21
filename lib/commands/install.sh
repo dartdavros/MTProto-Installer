@@ -4,6 +4,7 @@ install_all() {
   require_root
   resolve_install_contract
   validate_install_contract
+  run_install_preflight_checks
 
   ensure_packages
   ensure_user_and_dirs

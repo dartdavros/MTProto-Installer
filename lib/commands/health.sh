@@ -1,5 +1,93 @@
 # shellcheck shell=bash
 
+link_model_healthy() {
+  local definitions_count bundle_count tmp_bundle previous_bundle_path
+  local build_rc=0 compare_rc=0
+
+  [[ -f "${LINK_DEFINITIONS_PATH}" && -f "${LINK_BUNDLE_PATH}" ]] || return 1
+
+  definitions_count="$(awk 'NF {count++} END {print count+0}' "${LINK_DEFINITIONS_PATH}")"
+  bundle_count="$(awk 'NF {count++} END {print count+0}' "${LINK_BUNDLE_PATH}")"
+
+  (( definitions_count >= 1 )) || return 1
+  (( definitions_count == bundle_count )) || return 1
+
+  tmp_bundle="$(mktemp)"
+  previous_bundle_path="${LINK_BUNDLE_PATH}"
+  trap 'LINK_BUNDLE_PATH="${previous_bundle_path}"; rm -f "${tmp_bundle}"' RETURN
+
+  LINK_BUNDLE_PATH="${tmp_bundle}"
+  build_link_bundle || build_rc=$?
+
+  if (( build_rc == 0 )); then
+    cmp -s "${tmp_bundle}" "${previous_bundle_path}" || compare_rc=$?
+  fi
+
+  return $(( build_rc != 0 ? build_rc : compare_rc ))
+}
+
+service_unit_consistent() {
+  [[ -f "${SERVICE_PATH}" && -f "${RUNNER_PATH}" ]] || return 1
+  grep -Fq "ExecStart=${RUNNER_PATH}" "${SERVICE_PATH}" || return 1
+  grep -Fq "source \"${MANIFEST_PATH}\"" "${RUNNER_PATH}" || return 1
+}
+
+stealth_runtime_consistent() {
+  [[ -f "${STEALTH_CONFIG_PATH}" ]] || return 1
+  grep -Fq "public_host = \"${PUBLIC_DOMAIN}\"" "${STEALTH_CONFIG_PATH}" || return 1
+  grep -Fq "public_port = ${PUBLIC_PORT}" "${STEALTH_CONFIG_PATH}" || return 1
+  grep -Fq "tls_domain = \"${TLS_DOMAIN}\"" "${STEALTH_CONFIG_PATH}" || return 1
+
+  case "${DECOY_MODE}" in
+    upstream-forward)
+      grep -Fq "mask = true" "${STEALTH_CONFIG_PATH}" || return 1
+      grep -Fq "mask_host = \"${DECOY_TARGET_HOST}\"" "${STEALTH_CONFIG_PATH}" || return 1
+      grep -Fq "mask_port = ${DECOY_TARGET_PORT}" "${STEALTH_CONFIG_PATH}" || return 1
+      ;;
+    local-https)
+      grep -Fq "mask = true" "${STEALTH_CONFIG_PATH}" || return 1
+      grep -Fq 'mask_host = "127.0.0.1"' "${STEALTH_CONFIG_PATH}" || return 1
+      grep -Fq "mask_port = ${DECOY_LOCAL_PORT}" "${STEALTH_CONFIG_PATH}" || return 1
+      ;;
+    disabled)
+      grep -Fq "mask = false" "${STEALTH_CONFIG_PATH}" || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+official_runtime_consistent() {
+  [[ -f "${PROXY_SECRET_PATH}" && -f "${PROXY_MULTI_CONF_PATH}" ]] || return 1
+}
+
+runtime_config_consistent() {
+  if ! service_unit_consistent; then
+    return 1
+  fi
+
+  case "${ENGINE}" in
+    official)
+      official_runtime_consistent
+      ;;
+    stealth)
+      stealth_runtime_consistent
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+public_domain_health_check() {
+  local resolved_ips
+
+  resolved_ips="$(domain_resolved_ips "${PUBLIC_DOMAIN}")"
+  [[ -n "${resolved_ips}" ]] || return 1
+  domain_matches_local_host "${PUBLIC_DOMAIN}"
+}
+
 health() {
   require_installed
 
@@ -34,6 +122,13 @@ health() {
     failed=1
   fi
 
+  if public_domain_health_check; then
+    echo "  [ok] public domain resolves to the current VPS"
+  else
+    echo "  [fail] public domain DNS does not match this VPS"
+    failed=1
+  fi
+
   if engine_requires_telegram_upstream; then
     if systemctl is-enabled --quiet "${REFRESH_TIMER_NAME}" 2>/dev/null; then
       echo "  [ok] refresh timer enabled"
@@ -47,6 +142,20 @@ health() {
     echo "  [ok] runtime artifacts present"
   else
     echo "  [fail] runtime artifacts missing"
+    failed=1
+  fi
+
+  if runtime_config_consistent; then
+    echo "  [ok] runtime config consistent with manifest"
+  else
+    echo "  [fail] runtime config drift detected"
+    failed=1
+  fi
+
+  if link_model_healthy; then
+    echo "  [ok] link bundle consistent with definitions and secrets"
+  else
+    echo "  [fail] link bundle drift detected"
     failed=1
   fi
 
