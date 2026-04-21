@@ -36,3 +36,7 @@ official_build_engine_binary() {
 official_render_runtime_artifacts() {
   rm -f "${STEALTH_CONFIG_PATH}"
 }
+
+official_runtime_artifacts_present() {
+  [[ -f "${PROXY_SECRET_PATH}" && -f "${PROXY_MULTI_CONF_PATH}" && -x "${OFFICIAL_BIN_PATH}" ]]
+}

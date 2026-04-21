@@ -100,3 +100,7 @@ EOF_CFG
 stealth_render_runtime_artifacts() {
   render_stealth_config
 }
+
+stealth_runtime_artifacts_present() {
+  [[ -f "${STEALTH_CONFIG_PATH}" && -x "${STEALTH_BIN_PATH}" ]]
+}

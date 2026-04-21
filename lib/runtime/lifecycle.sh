@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 
 restart_managed_services() {
-  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+  if engine_uses_local_decoy_service; then
     systemctl restart "${DECOY_SERVICE_NAME}"
   fi
 
@@ -9,7 +9,7 @@ restart_managed_services() {
 }
 
 start_managed_services() {
-  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+  if engine_uses_local_decoy_service; then
     log "Запускаю ${DECOY_SERVICE_NAME}..."
     systemctl restart "${DECOY_SERVICE_NAME}"
   fi

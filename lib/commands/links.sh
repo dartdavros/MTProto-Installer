@@ -4,18 +4,15 @@ refresh_telegram_config() {
   require_root
   require_installed
 
-  case "${ENGINE}" in
-    official)
-      download_proxy_files
-      apply_permissions
-      apply_engine_runtime_tuning
-      restart_managed_services
-      log "Конфиг Telegram обновлен"
-      ;;
-    stealth)
-      warn "refresh-telegram-config не требуется для ENGINE=stealth"
-      ;;
-  esac
+  if engine_requires_telegram_upstream; then
+    download_proxy_files
+    apply_permissions
+    apply_engine_runtime_tuning
+    restart_managed_services
+    log "Конфиг Telegram обновлен"
+  else
+    warn "refresh-telegram-config не требуется для ENGINE=stealth"
+  fi
 }
 
 rotate_link() {
@@ -43,7 +40,7 @@ rotate_link() {
 
   (( found == 1 )) || die "Link slot не найден: ${target_name}"
 
-  render_engine_runtime_artifacts
+  engine_render_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
@@ -68,7 +65,7 @@ rotate_all_links() {
     printf '%s\n' "${desired_value}" > "${secret_file}"
   done < "${LINK_DEFINITIONS_PATH}"
 
-  render_engine_runtime_artifacts
+  engine_render_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   apply_permissions
@@ -84,4 +81,19 @@ rotate_secret_legacy_alias() {
   first_name="$(awk 'NR==1 {print $1}' "${LINK_DEFINITIONS_PATH}")"
   [[ -n "${first_name}" ]] || die "Не найден primary link slot"
   rotate_link "${first_name}"
+}
+
+share_links() {
+  require_root
+  require_installed
+
+  echo "Links:"
+  print_links_table "yes"
+}
+
+list_links() {
+  require_installed
+
+  echo "Links (redacted):"
+  print_links_table "no"
 }

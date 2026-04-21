@@ -73,7 +73,7 @@ reload_and_enable_units() {
     systemctl disable --now "${REFRESH_TIMER_NAME}" >/dev/null 2>&1 || true
   fi
 
-  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
+  if engine_uses_local_decoy_service; then
     systemctl enable "${DECOY_SERVICE_NAME}" >/dev/null
   else
     systemctl disable --now "${DECOY_SERVICE_NAME}" >/dev/null 2>&1 || true

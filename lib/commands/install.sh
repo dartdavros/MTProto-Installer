@@ -13,12 +13,7 @@ show_post_install_summary() {
   fi
   echo "TLS domain: ${TLS_DOMAIN}"
   echo "Decoy:      ${DECOY_MODE}"
-  if [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "upstream-forward" ]]; then
-    echo "Decoy upstream: ${DECOY_TARGET_HOST}:${DECOY_TARGET_PORT}"
-  elif [[ "${ENGINE}" == "stealth" && "${DECOY_MODE}" == "local-https" ]]; then
-    echo "Decoy domain: ${DECOY_DOMAIN}"
-    echo "Decoy local:  127.0.0.1:${DECOY_LOCAL_PORT}"
-  fi
+  print_decoy_summary_lines
   echo "Links:      $(awk 'END {print NR+0}' "${LINK_BUNDLE_PATH}")"
   echo
   echo "Секреты и tg:// ссылки по умолчанию не печатаются."
@@ -40,7 +35,7 @@ install_all() {
   ensure_packages
   ensure_user_and_dirs
   clone_or_update_engine_repo
-  build_engine_binary
+  engine_build_binary
   write_managed_link_definitions
   migrate_legacy_layout_if_present
   ensure_link_secrets
@@ -54,7 +49,7 @@ install_all() {
   fi
 
   persist_manifest
-  render_engine_runtime_artifacts
+  engine_render_runtime_artifacts
   render_decoy_runtime_artifacts
   build_link_bundle
   render_runner_script
