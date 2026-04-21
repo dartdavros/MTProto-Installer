@@ -15,6 +15,8 @@ Usage:
   sudo bash $0 rotate-all-links
   sudo bash $0 list-rotation-backups
   sudo bash $0 restore-rotation-backup <backup-id|latest>
+  sudo bash $0 list-install-backups
+  sudo bash $0 restore-install-backup <backup-id|latest>
   sudo bash $0 refresh-telegram-config
   sudo bash $0 check-domain
   sudo bash $0 test-decoy

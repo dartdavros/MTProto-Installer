@@ -45,6 +45,7 @@ sensitive_artifacts_secure() {
   check_path_contract "${RUNTIME_DIR}" "750" "root:${RUN_GROUP}" "runtime dir" || return 1
   check_path_contract "${STATE_DIR}" "750" "${RUN_USER}:${RUN_GROUP}" "state dir" || return 1
   check_path_contract "${ROTATION_BACKUPS_DIR}" "750" "root:${RUN_GROUP}" "rotation backups dir" || return 1
+  check_path_contract "${INSTALL_BACKUPS_DIR}" "750" "root:${RUN_GROUP}" "install backups dir" || return 1
 
   check_path_contract "${MANIFEST_PATH}" "640" "root:${RUN_GROUP}" "manifest" || return 1
   check_path_contract "${LINK_DEFINITIONS_PATH}" "640" "root:${RUN_GROUP}" "link definitions" || return 1
@@ -73,6 +74,34 @@ sensitive_artifacts_secure() {
   while IFS= read -r -d '' metadata_file; do
     check_path_contract "${metadata_file}" "640" "root:${RUN_GROUP}" "rotation backup metadata" || return 1
   done < <(find "${ROTATION_BACKUPS_DIR}" -mindepth 2 -maxdepth 2 -type f -name 'metadata.env' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' metadata_file; do
+    check_path_contract "${metadata_file}" "640" "root:${RUN_GROUP}" "install backup metadata" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 2 -maxdepth 2 -type f -name 'metadata.env' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' config_root_dir; do
+    check_path_contract "${config_root_dir}" "750" "root:${RUN_GROUP}" "install backup config-root dir" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 2 -type d -path '*/config-root*' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' config_root_file; do
+    check_path_contract "${config_root_file}" "640" "root:${RUN_GROUP}" "install backup config-root file" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -type f -path '*/config-root/*' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' systemd_file; do
+    check_path_contract "${systemd_file}" "640" "root:${RUN_GROUP}" "install backup systemd file" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -maxdepth 3 -type f -path '*/systemd/*' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' libexec_file; do
+    check_path_contract "${libexec_file}" "750" "root:${RUN_GROUP}" "install backup libexec file" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -maxdepth 3 -type f -path '*/libexec/*' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' bin_file; do
+    check_path_contract "${bin_file}" "750" "root:${RUN_GROUP}" "install backup binary" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -maxdepth 3 -type f -path '*/bin/*' -print0 2>/dev/null | sort -z)
+
+  while IFS= read -r -d '' sysctl_file; do
+    check_path_contract "${sysctl_file}" "640" "root:${RUN_GROUP}" "install backup sysctl" || return 1
+  done < <(find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -maxdepth 3 -type f -path '*/sysctl/*' -print0 2>/dev/null | sort -z)
 
   return 0
 }

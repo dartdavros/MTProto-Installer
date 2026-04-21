@@ -26,8 +26,8 @@ apply_permissions() {
   [[ -f "${DECOY_SERVER_PATH}" ]] && chown root:"${RUN_GROUP}" "${DECOY_SERVER_PATH}" && chmod 0750 "${DECOY_SERVER_PATH}"
 
   chown -R "${RUN_USER}:${RUN_GROUP}" "${STATE_DIR}"
-  chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"
-  chmod 750 "${STATE_DIR}" "${ROTATION_BACKUPS_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
+  chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}" "${INSTALL_BACKUPS_DIR}"
+  chmod 750 "${STATE_DIR}" "${ROTATION_BACKUPS_DIR}" "${INSTALL_BACKUPS_DIR}" "${STEALTH_TLS_FRONT_DIR}" "${DECOY_WWW_DIR}"
 
   if [[ -d "${ROTATION_BACKUPS_DIR}" ]]; then
     find "${ROTATION_BACKUPS_DIR}" -mindepth 1 -type d -exec chown root:"${RUN_GROUP}" {} +
@@ -47,5 +47,49 @@ apply_permissions() {
   if compgen -G "${ROTATION_BACKUPS_DIR}/*/secrets/*.secret" >/dev/null; then
     chown root:"${RUN_GROUP}" "${ROTATION_BACKUPS_DIR}"/*/secrets/*.secret
     chmod 0640 "${ROTATION_BACKUPS_DIR}"/*/secrets/*.secret
+  fi
+
+  if [[ -d "${INSTALL_BACKUPS_DIR}" ]]; then
+    find "${INSTALL_BACKUPS_DIR}" -mindepth 1 -type d -exec chown root:"${RUN_GROUP}" {} +
+    find "${INSTALL_BACKUPS_DIR}" -mindepth 1 -type d -exec chmod 750 {} +
+  fi
+
+  if compgen -G "${INSTALL_BACKUPS_DIR}/*/metadata.env" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${INSTALL_BACKUPS_DIR}"/*/metadata.env
+    chmod 0640 "${INSTALL_BACKUPS_DIR}"/*/metadata.env
+  fi
+
+  if [[ -d "${INSTALL_BACKUPS_DIR}" ]]; then
+    find "${INSTALL_BACKUPS_DIR}" -mindepth 2 -type d -path '*/config-root*' -exec chown root:"${RUN_GROUP}" {} +
+    find "${INSTALL_BACKUPS_DIR}" -mindepth 2 -type d -path '*/config-root*' -exec chmod 750 {} +
+  fi
+
+  if compgen -G "${INSTALL_BACKUPS_DIR}/*/config-root/*" >/dev/null; then
+    find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -type f -path '*/config-root/*' -exec chown root:"${RUN_GROUP}" {} +
+    find "${INSTALL_BACKUPS_DIR}" -mindepth 3 -type f -path '*/config-root/*' -exec chmod 0640 {} +
+  fi
+
+  if compgen -G "${INSTALL_BACKUPS_DIR}/*/systemd/*" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${INSTALL_BACKUPS_DIR}"/*/systemd/*
+    chmod 0640 "${INSTALL_BACKUPS_DIR}"/*/systemd/*
+  fi
+
+  if compgen -G "${INSTALL_BACKUPS_DIR}/*/libexec/*" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${INSTALL_BACKUPS_DIR}"/*/libexec/*
+    chmod 0750 "${INSTALL_BACKUPS_DIR}"/*/libexec/*
+  fi
+
+  if compgen -G "${INSTALL_BACKUPS_DIR}/*/bin/*" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${INSTALL_BACKUPS_DIR}"/*/bin/*
+    chmod 0750 "${INSTALL_BACKUPS_DIR}"/*/bin/*
+  fi
+
+  if compgen -G "${INSTALL_BACKUPS_DIR}/*/sysctl/*" >/dev/null; then
+    chown root:"${RUN_GROUP}" "${INSTALL_BACKUPS_DIR}"/*/sysctl/*
+    chmod 0640 "${INSTALL_BACKUPS_DIR}"/*/sysctl/*
+  fi
+
+  if [[ -L "${INSTALL_BACKUP_LATEST_LINK}" ]]; then
+    chown -h root:"${RUN_GROUP}" "${INSTALL_BACKUP_LATEST_LINK}"
   fi
 }

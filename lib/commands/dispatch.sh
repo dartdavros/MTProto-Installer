@@ -33,6 +33,12 @@ main() {
     restore-rotation-backup)
       restore_rotation_backup "${arg}"
       ;;
+    list-install-backups)
+      list_install_backups
+      ;;
+    restore-install-backup)
+      restore_install_backup "${arg}"
+      ;;
     check-domain)
       check_domain_command
       ;;
