@@ -102,11 +102,3 @@ engine_render_runtime_artifacts() {
   esac
 }
 
-
-build_engine_binary() {
-  engine_build_binary "$@"
-}
-
-render_engine_runtime_artifacts() {
-  engine_render_runtime_artifacts "$@"
-}

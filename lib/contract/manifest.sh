@@ -1,10 +1,31 @@
 # shellcheck shell=bash
 
-has_manifest() {
-  [[ -f "${MANIFEST_PATH}" ]]
+manifest_contract_fields() {
+  cat <<'EOF_FIELDS'
+PUBLIC_DOMAIN
+PUBLIC_PORT
+INTERNAL_PORT
+WORKERS
+ENGINE
+PRIMARY_PROFILE
+LINK_STRATEGY
+DEVICE_NAMES
+TLS_DOMAIN
+DECOY_MODE
+DECOY_TARGET_HOST
+DECOY_TARGET_PORT
+DECOY_DOMAIN
+DECOY_LOCAL_PORT
+DECOY_CERT_PATH
+DECOY_KEY_PATH
+OFFICIAL_REPO_URL
+OFFICIAL_REPO_BRANCH
+STEALTH_REPO_URL
+STEALTH_REPO_BRANCH
+EOF_FIELDS
 }
 
-read_manifest_contract() {
+clear_manifest_contract() {
   MANIFEST_PUBLIC_DOMAIN=""
   MANIFEST_PUBLIC_PORT=""
   MANIFEST_INTERNAL_PORT=""
@@ -25,53 +46,67 @@ read_manifest_contract() {
   MANIFEST_OFFICIAL_REPO_BRANCH=""
   MANIFEST_STEALTH_REPO_URL=""
   MANIFEST_STEALTH_REPO_BRANCH=""
+}
 
-  if [[ -f "${MANIFEST_PATH}" ]]; then
-    local PUBLIC_DOMAIN=""
-    local PUBLIC_PORT=""
-    local INTERNAL_PORT=""
-    local WORKERS=""
-    local ENGINE=""
-    local PRIMARY_PROFILE=""
-    local LINK_STRATEGY=""
-    local DEVICE_NAMES=""
-    local TLS_DOMAIN=""
-    local DECOY_MODE=""
-    local DECOY_TARGET_HOST=""
-    local DECOY_TARGET_PORT=""
-    local DECOY_DOMAIN=""
-    local DECOY_LOCAL_PORT=""
-    local DECOY_CERT_PATH=""
-    local DECOY_KEY_PATH=""
-    local OFFICIAL_REPO_URL=""
-    local OFFICIAL_REPO_BRANCH=""
-    local STEALTH_REPO_URL=""
-    local STEALTH_REPO_BRANCH=""
+has_manifest() {
+  [[ -f "${MANIFEST_PATH}" ]]
+}
 
+emit_manifest_contract_snapshot() {
+  local field emit_script=""
+
+  [[ -f "${MANIFEST_PATH}" ]] || return 0
+
+  while IFS= read -r field; do
+    [[ -n "${field}" ]] || continue
+    printf -v emit_script '%sprintf "%%s\\n" "${%s-}"\n' "${emit_script}" "${field}"
+  done < <(manifest_contract_fields)
+
+  MANIFEST_PATH_INPUT="${MANIFEST_PATH}" \
+  MANIFEST_EMIT_SCRIPT="${emit_script}" \
+  bash -c '
+    set -Eeuo pipefail
     # shellcheck disable=SC1090
-    source "${MANIFEST_PATH}"
+    source "$MANIFEST_PATH_INPUT"
+    eval "$MANIFEST_EMIT_SCRIPT"
+  '
+}
 
-    MANIFEST_PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"
-    MANIFEST_PUBLIC_PORT="${PUBLIC_PORT:-}"
-    MANIFEST_INTERNAL_PORT="${INTERNAL_PORT:-}"
-    MANIFEST_WORKERS="${WORKERS:-}"
-    MANIFEST_ENGINE="${ENGINE:-}"
-    MANIFEST_PRIMARY_PROFILE="${PRIMARY_PROFILE:-}"
-    MANIFEST_LINK_STRATEGY="${LINK_STRATEGY:-}"
-    MANIFEST_DEVICE_NAMES="${DEVICE_NAMES:-}"
-    MANIFEST_TLS_DOMAIN="${TLS_DOMAIN:-}"
-    MANIFEST_DECOY_MODE="${DECOY_MODE:-}"
-    MANIFEST_DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
-    MANIFEST_DECOY_TARGET_PORT="${DECOY_TARGET_PORT:-}"
-    MANIFEST_DECOY_DOMAIN="${DECOY_DOMAIN:-}"
-    MANIFEST_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT:-}"
-    MANIFEST_DECOY_CERT_SOURCE_PATH="${DECOY_CERT_PATH:-}"
-    MANIFEST_DECOY_KEY_SOURCE_PATH="${DECOY_KEY_PATH:-}"
-    MANIFEST_OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL:-}"
-    MANIFEST_OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH:-}"
-    MANIFEST_STEALTH_REPO_URL="${STEALTH_REPO_URL:-}"
-    MANIFEST_STEALTH_REPO_BRANCH="${STEALTH_REPO_BRANCH:-}"
-  fi
+read_manifest_contract() {
+  local fields values i field value
+
+  clear_manifest_contract
+  [[ -f "${MANIFEST_PATH}" ]] || return 0
+
+  fields=()
+  while IFS= read -r field; do
+    [[ -n "${field}" ]] || continue
+    fields+=("${field}")
+  done < <(manifest_contract_fields)
+
+  values=()
+  while IFS= read -r value; do
+    values+=("${value}")
+  done < <(emit_manifest_contract_snapshot)
+
+  (( ${#fields[@]} == ${#values[@]} )) || die "Не удалось корректно прочитать manifest: ${MANIFEST_PATH}"
+
+  for i in "${!fields[@]}"; do
+    field="${fields[i]}"
+    value="${values[i]}"
+
+    case "${field}" in
+      DECOY_CERT_PATH)
+        MANIFEST_DECOY_CERT_SOURCE_PATH="${value}"
+        ;;
+      DECOY_KEY_PATH)
+        MANIFEST_DECOY_KEY_SOURCE_PATH="${value}"
+        ;;
+      *)
+        printf -v "MANIFEST_${field}" '%s' "${value}"
+        ;;
+    esac
+  done
 }
 
 persist_manifest() {
