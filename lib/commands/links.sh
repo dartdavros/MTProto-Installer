@@ -7,8 +7,7 @@ refresh_telegram_config() {
   if engine_requires_telegram_upstream; then
     download_proxy_files
     apply_permissions
-    apply_engine_runtime_tuning
-    restart_managed_services
+    restart_managed_runtime
     log "Конфиг Telegram обновлен"
   else
     warn "refresh-telegram-config не требуется для ENGINE=${ENGINE}"
@@ -40,12 +39,7 @@ rotate_link() {
 
   (( found == 1 )) || die "Link slot не найден: ${target_name}"
 
-  engine_render_runtime_artifacts
-  render_decoy_runtime_artifacts
-  build_link_bundle
-  apply_permissions
-  apply_engine_runtime_tuning
-  restart_managed_services
+  reconcile_and_restart_managed_runtime
 
   log "Link ${target_name} обновлен"
 }
@@ -65,12 +59,7 @@ rotate_all_links() {
     printf '%s\n' "${desired_value}" > "${secret_file}"
   done < "${LINK_DEFINITIONS_PATH}"
 
-  engine_render_runtime_artifacts
-  render_decoy_runtime_artifacts
-  build_link_bundle
-  apply_permissions
-  apply_engine_runtime_tuning
-  restart_managed_services
+  reconcile_and_restart_managed_runtime
 
   log "Все link slots обновлены"
 }

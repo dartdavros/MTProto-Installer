@@ -3,8 +3,7 @@
 restart_service_command() {
   require_root
   require_installed
-  apply_engine_runtime_tuning
-  restart_managed_services
+  restart_managed_runtime
   status
 }
 

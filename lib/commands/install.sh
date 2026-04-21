@@ -22,9 +22,7 @@ install_all() {
   fi
 
   persist_manifest
-  engine_render_runtime_artifacts
-  render_decoy_runtime_artifacts
-  build_link_bundle
+  reconcile_managed_runtime_artifacts
   render_runner_script
   render_refresh_helper
   render_service_file

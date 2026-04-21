@@ -21,3 +21,20 @@ start_managed_services() {
     systemctl start "${REFRESH_TIMER_NAME}"
   fi
 }
+
+reconcile_managed_runtime_artifacts() {
+  engine_render_runtime_artifacts
+  render_decoy_runtime_artifacts
+  build_link_bundle
+  apply_permissions
+}
+
+restart_managed_runtime() {
+  apply_engine_runtime_tuning
+  restart_managed_services
+}
+
+reconcile_and_restart_managed_runtime() {
+  reconcile_managed_runtime_artifacts
+  restart_managed_runtime
+}

@@ -4,11 +4,6 @@ has_manifest() {
   [[ -f "${MANIFEST_PATH}" ]]
 }
 
-load_manifest() {
-  # shellcheck disable=SC1090
-  source "${MANIFEST_PATH}"
-}
-
 read_manifest_contract() {
   MANIFEST_PUBLIC_DOMAIN=""
   MANIFEST_PUBLIC_PORT=""
