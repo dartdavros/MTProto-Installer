@@ -1,32 +1,5 @@
 # shellcheck shell=bash
 
-show_post_install_summary() {
-  echo
-  echo "========================================"
-  echo "MTProxy установлен"
-  echo "Domain:     ${PUBLIC_DOMAIN}"
-  echo "Port:       ${PUBLIC_PORT}"
-  echo "Engine:     ${ENGINE}"
-  echo "Strategy:   ${LINK_STRATEGY}"
-  if [[ "${LINK_STRATEGY}" == "per-device" ]]; then
-    echo "Devices:    ${DEVICE_NAMES}"
-  fi
-  echo "TLS domain: ${TLS_DOMAIN}"
-  echo "Decoy:      ${DECOY_MODE}"
-  print_decoy_summary_lines
-  echo "Links:      $(awk 'END {print NR+0}' "${LINK_BUNDLE_PATH}")"
-  echo
-  echo "Секреты и tg:// ссылки по умолчанию не печатаются."
-  echo "Чтобы намеренно открыть bundle, выполни:"
-  echo "  sudo bash $0 share-links"
-  echo
-  echo "Проверка:"
-  echo "  sudo bash $0 status"
-  echo "  sudo bash $0 health"
-  echo "========================================"
-  echo
-}
-
 install_all() {
   require_root
   resolve_install_contract
@@ -62,36 +35,4 @@ install_all() {
   configure_firewall
   start_managed_services
   show_post_install_summary
-}
-
-uninstall_all() {
-  require_root
-
-  warn "Останавливаю и удаляю сервисы..."
-  systemctl disable --now "${REFRESH_TIMER_NAME}" 2>/dev/null || true
-  systemctl disable --now "${DECOY_SERVICE_NAME}" 2>/dev/null || true
-  systemctl disable --now "${SERVICE_NAME}" 2>/dev/null || true
-  rm -f "${SERVICE_PATH}" "${REFRESH_SERVICE_PATH}" "${REFRESH_TIMER_PATH}" "${DECOY_SERVICE_PATH}"
-  systemctl daemon-reload
-
-  warn "Удаляю бинарники, исходники и helper scripts..."
-  rm -f "${OFFICIAL_BIN_PATH}" "${STEALTH_BIN_PATH}" "${RUNNER_PATH}" "${REFRESH_HELPER_PATH}" "${DECOY_SERVER_PATH}"
-  rm -rf "${OFFICIAL_SRC_DIR}" "${STEALTH_SRC_DIR}"
-
-  warn "Удаляю sysctl workaround..."
-  rm -f "${SYSCTL_FILE}"
-  sysctl --system >/dev/null 2>&1 || true
-
-  warn "Удаляю конфиги и state..."
-  rm -rf "${CONFIG_ROOT}" "${STATE_DIR}"
-
-  if id -u "${RUN_USER}" >/dev/null 2>&1; then
-    userdel "${RUN_USER}" 2>/dev/null || true
-  fi
-
-  if getent group "${RUN_GROUP}" >/dev/null 2>&1; then
-    groupdel "${RUN_GROUP}" 2>/dev/null || true
-  fi
-
-  log "MTProxy удален"
 }
