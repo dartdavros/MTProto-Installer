@@ -63,6 +63,7 @@ REQUESTED_WORKERS="${WORKERS:-}"
 REQUESTED_ENGINE="${ENGINE:-}"
 REQUESTED_PRIMARY_PROFILE="${PRIMARY_PROFILE:-}"
 REQUESTED_LINK_STRATEGY="${LINK_STRATEGY:-}"
+REQUESTED_DEVICE_NAMES="${DEVICE_NAMES:-}"
 REQUESTED_TLS_DOMAIN="${TLS_DOMAIN:-}"
 REQUESTED_DECOY_MODE="${DECOY_MODE:-}"
 REQUESTED_DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
@@ -75,6 +76,7 @@ WORKERS="1"
 ENGINE="official"
 PRIMARY_PROFILE=""
 LINK_STRATEGY="bundle"
+DEVICE_NAMES=""
 TLS_DOMAIN=""
 DECOY_MODE="disabled"
 DECOY_TARGET_HOST=""
@@ -130,6 +132,34 @@ validate_host_or_ip() {
   [[ "${value}" =~ ^[A-Za-z0-9._:-]+$ ]] || die "Некорректный host/ip: ${value}"
 }
 
+normalize_device_names_csv() {
+  local raw="$1"
+  local normalized=""
+  local seen=" "
+  local item token
+
+  raw="${raw//;/,}"
+  raw="${raw// /,}"
+  raw="${raw//$'\n'/,}"
+  raw="${raw//$'\t'/,}"
+
+  IFS=',' read -r -a items <<< "${raw}"
+  for item in "${items[@]}"; do
+    token="${item,,}"
+    token="${token//_/-}"
+    [[ -n "${token}" ]] || continue
+    [[ "${token}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || die "Некорректное имя устройства: ${token}"
+    [[ "${token}" != *- ]] || die "Имя устройства не должно заканчиваться '-': ${token}"
+
+    if [[ "${seen}" != *" ${token} "* ]]; then
+      normalized="${normalized:+${normalized},}${token}"
+      seen+="${token} "
+    fi
+  done
+
+  printf '%s\n' "${normalized}"
+}
+
 default_primary_profile_for_engine() {
   local engine="$1"
   case "${engine}" in
@@ -158,6 +188,7 @@ read_manifest_contract() {
   MANIFEST_ENGINE=""
   MANIFEST_PRIMARY_PROFILE=""
   MANIFEST_LINK_STRATEGY=""
+  MANIFEST_DEVICE_NAMES=""
   MANIFEST_TLS_DOMAIN=""
   MANIFEST_DECOY_MODE=""
   MANIFEST_DECOY_TARGET_HOST=""
@@ -175,6 +206,7 @@ read_manifest_contract() {
     local ENGINE=""
     local PRIMARY_PROFILE=""
     local LINK_STRATEGY=""
+    local DEVICE_NAMES=""
     local TLS_DOMAIN=""
     local DECOY_MODE=""
     local DECOY_TARGET_HOST=""
@@ -194,6 +226,7 @@ read_manifest_contract() {
     MANIFEST_ENGINE="${ENGINE:-}"
     MANIFEST_PRIMARY_PROFILE="${PRIMARY_PROFILE:-}"
     MANIFEST_LINK_STRATEGY="${LINK_STRATEGY:-}"
+    MANIFEST_DEVICE_NAMES="${DEVICE_NAMES:-}"
     MANIFEST_TLS_DOMAIN="${TLS_DOMAIN:-}"
     MANIFEST_DECOY_MODE="${DECOY_MODE:-}"
     MANIFEST_DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
@@ -219,6 +252,7 @@ resolve_install_contract() {
   WORKERS="${REQUESTED_WORKERS:-${MANIFEST_WORKERS:-1}}"
   PRIMARY_PROFILE="${REQUESTED_PRIMARY_PROFILE:-${MANIFEST_PRIMARY_PROFILE:-${default_profile}}}"
   LINK_STRATEGY="${REQUESTED_LINK_STRATEGY:-${MANIFEST_LINK_STRATEGY:-bundle}}"
+  DEVICE_NAMES="${REQUESTED_DEVICE_NAMES:-${MANIFEST_DEVICE_NAMES:-}}"
   TLS_DOMAIN="${REQUESTED_TLS_DOMAIN:-${MANIFEST_TLS_DOMAIN:-${PUBLIC_DOMAIN}}}"
   DECOY_MODE="${REQUESTED_DECOY_MODE:-${MANIFEST_DECOY_MODE:-disabled}}"
   DECOY_TARGET_HOST="${REQUESTED_DECOY_TARGET_HOST:-${MANIFEST_DECOY_TARGET_HOST:-}}"
@@ -229,6 +263,7 @@ resolve_install_contract() {
   STEALTH_REPO_URL="${REQUESTED_STEALTH_REPO_URL:-${MANIFEST_STEALTH_REPO_URL:-${STEALTH_REPO_URL_DEFAULT}}}"
   STEALTH_REPO_BRANCH="${REQUESTED_STEALTH_REPO_BRANCH:-${MANIFEST_STEALTH_REPO_BRANCH:-${STEALTH_REPO_BRANCH_DEFAULT}}}"
 
+  DEVICE_NAMES="$(normalize_device_names_csv "${DEVICE_NAMES}")"
   PUBLIC_DOMAIN="${PUBLIC_DOMAIN,,}"
   TLS_DOMAIN="${TLS_DOMAIN,,}"
 }
@@ -301,7 +336,7 @@ validate_install_contract() {
     bundle)
       ;;
     per-device)
-      die "LINK_STRATEGY=per-device еще не реализован в текущей итерации"
+      [[ -n "${DEVICE_NAMES}" ]] || die "Для LINK_STRATEGY=per-device требуется DEVICE_NAMES=phone,desktop,tablet"
       ;;
     *)
       die "Поддерживаются только LINK_STRATEGY=bundle|per-device"
@@ -468,33 +503,81 @@ build_engine_binary() {
   fi
 }
 
-write_default_link_definitions() {
-  if [[ -f "${LINK_DEFINITIONS_PATH}" ]]; then
+fallback_profile_for_primary() {
+  case "${ENGINE}:${PRIMARY_PROFILE}" in
+    official:dd) printf 'classic\n' ;;
+    official:classic) printf 'dd\n' ;;
+    stealth:ee) printf 'dd\n' ;;
+    stealth:dd) printf 'classic\n' ;;
+    stealth:classic) printf 'dd\n' ;;
+    *) die "Неизвестная комбинация ENGINE/PRIMARY_PROFILE: ${ENGINE}/${PRIMARY_PROFILE}" ;;
+  esac
+}
+
+write_managed_link_definitions() {
+  local tmp_path
+  local fallback_profile
+  local device
+  local created=0
+
+  tmp_path="${LINK_DEFINITIONS_PATH}.tmp"
+  : > "${tmp_path}"
+
+  case "${LINK_STRATEGY}" in
+    bundle)
+      case "${ENGINE}:${PRIMARY_PROFILE}" in
+        official:dd)
+          printf 'primary-dd\tdd\nreserve-dd\tdd\nfallback-classic\tclassic\n' > "${tmp_path}"
+          ;;
+        official:classic)
+          printf 'primary-classic\tclassic\nreserve-classic\tclassic\nfallback-dd\tdd\n' > "${tmp_path}"
+          ;;
+        stealth:ee)
+          printf 'primary-ee\tee\nreserve-ee\tee\nfallback-dd\tdd\n' > "${tmp_path}"
+          ;;
+        stealth:dd)
+          printf 'primary-dd\tdd\nreserve-dd\tdd\nfallback-classic\tclassic\n' > "${tmp_path}"
+          ;;
+        stealth:classic)
+          printf 'primary-classic\tclassic\nreserve-classic\tclassic\nfallback-dd\tdd\n' > "${tmp_path}"
+          ;;
+        *)
+          rm -f "${tmp_path}"
+          die "Неизвестная комбинация ENGINE/PRIMARY_PROFILE: ${ENGINE}/${PRIMARY_PROFILE}"
+          ;;
+      esac
+      ;;
+    per-device)
+      fallback_profile="$(fallback_profile_for_primary)"
+      IFS=',' read -r -a devices <<< "${DEVICE_NAMES}"
+      for device in "${devices[@]}"; do
+        [[ -n "${device}" ]] || continue
+        printf '%s-%s\t%s\n' "${device}" "${PRIMARY_PROFILE}" "${PRIMARY_PROFILE}" >> "${tmp_path}"
+        created=1
+      done
+
+      (( created == 1 )) || { rm -f "${tmp_path}"; die "Не удалось построить per-device definitions: пустой DEVICE_NAMES"; }
+      printf 'shared-fallback-%s\t%s\n' "${fallback_profile}" "${fallback_profile}" >> "${tmp_path}"
+      ;;
+    *)
+      rm -f "${tmp_path}"
+      die "Неизвестная стратегия ссылок: ${LINK_STRATEGY}"
+      ;;
+  esac
+
+  if [[ -f "${LINK_DEFINITIONS_PATH}" ]] && cmp -s "${tmp_path}" "${LINK_DEFINITIONS_PATH}"; then
+    rm -f "${tmp_path}"
+    info "Link definitions уже актуальны"
     return 0
   fi
 
-  log "Создаю модель ссылок по умолчанию..."
+  if [[ -f "${LINK_DEFINITIONS_PATH}" ]]; then
+    log "Обновляю модель ссылок (${LINK_STRATEGY})..."
+  else
+    log "Создаю модель ссылок (${LINK_STRATEGY})..."
+  fi
 
-  case "${ENGINE}:${PRIMARY_PROFILE}" in
-    official:dd)
-      printf 'primary-dd\tdd\nreserve-dd\tdd\nfallback-classic\tclassic\n' > "${LINK_DEFINITIONS_PATH}"
-      ;;
-    official:classic)
-      printf 'primary-classic\tclassic\nreserve-classic\tclassic\nfallback-dd\tdd\n' > "${LINK_DEFINITIONS_PATH}"
-      ;;
-    stealth:ee)
-      printf 'primary-ee\tee\nreserve-ee\tee\nfallback-dd\tdd\n' > "${LINK_DEFINITIONS_PATH}"
-      ;;
-    stealth:dd)
-      printf 'primary-dd\tdd\nreserve-dd\tdd\nfallback-classic\tclassic\n' > "${LINK_DEFINITIONS_PATH}"
-      ;;
-    stealth:classic)
-      printf 'primary-classic\tclassic\nreserve-classic\tclassic\nfallback-dd\tdd\n' > "${LINK_DEFINITIONS_PATH}"
-      ;;
-    *)
-      die "Неизвестная комбинация ENGINE/PRIMARY_PROFILE: ${ENGINE}/${PRIMARY_PROFILE}"
-      ;;
-  esac
+  mv "${tmp_path}" "${LINK_DEFINITIONS_PATH}"
 }
 
 secret_file_for_name() {
@@ -693,6 +776,7 @@ persist_manifest() {
     quote_kv ENGINE "${ENGINE}"
     quote_kv PRIMARY_PROFILE "${PRIMARY_PROFILE}"
     quote_kv LINK_STRATEGY "${LINK_STRATEGY}"
+    quote_kv DEVICE_NAMES "${DEVICE_NAMES}"
     quote_kv TLS_DOMAIN "${TLS_DOMAIN}"
     quote_kv DECOY_MODE "${DECOY_MODE}"
     quote_kv DECOY_TARGET_HOST "${DECOY_TARGET_HOST}"
@@ -1074,6 +1158,10 @@ show_post_install_summary() {
   echo "Domain:     ${PUBLIC_DOMAIN}"
   echo "Port:       ${PUBLIC_PORT}"
   echo "Engine:     ${ENGINE}"
+  echo "Strategy:   ${LINK_STRATEGY}"
+  if [[ "${LINK_STRATEGY}" == "per-device" ]]; then
+    echo "Devices:    ${DEVICE_NAMES}"
+  fi
   echo "TLS domain: ${TLS_DOMAIN}"
   echo "Decoy:      ${DECOY_MODE}"
   echo "Links:      $(awk 'END {print NR+0}' "${LINK_BUNDLE_PATH}")"
@@ -1096,6 +1184,10 @@ status() {
   echo "Domain:     ${PUBLIC_DOMAIN}"
   echo "Port:       ${PUBLIC_PORT}"
   echo "Engine:     ${ENGINE}"
+  echo "Strategy:   ${LINK_STRATEGY}"
+  if [[ "${LINK_STRATEGY}" == "per-device" ]]; then
+    echo "Devices:    ${DEVICE_NAMES}"
+  fi
   echo "TLS domain: ${TLS_DOMAIN}"
   echo "Decoy:      ${DECOY_MODE}"
 
@@ -1309,7 +1401,7 @@ install_all() {
   ensure_user_and_dirs
   clone_or_update_engine_repo
   build_engine_binary
-  write_default_link_definitions
+  write_managed_link_definitions
   migrate_legacy_layout_if_present
   ensure_link_secrets
 
@@ -1393,7 +1485,8 @@ Environment variables:
   WORKERS=1
   ENGINE=official|stealth
   PRIMARY_PROFILE=dd|classic (official), ee|dd|classic (stealth)
-  LINK_STRATEGY=bundle
+  LINK_STRATEGY=bundle|per-device
+  DEVICE_NAMES=phone,desktop,tablet
   TLS_DOMAIN=<defaults to PUBLIC_DOMAIN>
   DECOY_MODE=disabled|upstream-forward
   DECOY_TARGET_HOST=<required for DECOY_MODE=upstream-forward>
@@ -1406,6 +1499,7 @@ Environment variables:
 Examples:
   sudo PUBLIC_DOMAIN=proxy.example.com bash $0 install
   sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth bash $0 install
+  sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth LINK_STRATEGY=per-device DEVICE_NAMES=phone,desktop,tablet bash $0 install
   sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth TLS_DOMAIN=cdn.example.com DECOY_MODE=upstream-forward DECOY_TARGET_HOST=site.example.com DECOY_TARGET_PORT=443 bash $0 install
 EOF_USAGE
 }

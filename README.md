@@ -29,6 +29,7 @@
   - `/etc/mtproxy/links/`
   - `/etc/mtproxy/runtime/`
 - bundle из нескольких ссылок;
+- `LINK_STRATEGY=per-device` с именованными device links и shared fallback;
 - quiet-by-default install/status;
 - ротация одной ссылки или всех ссылок;
 - engine-aware secret storage и link rendering;
@@ -47,6 +48,7 @@
 Для `ENGINE=stealth`:
 
 - если используется `DECOY_MODE=upstream-forward`, нужен реальный upstream HTTPS target.
+- `DECOY_MODE=local-https` пока не реализован, потому что для него нужен отдельный честный локальный HTTPS decoy contour с сертификатами и backend topology.
 
 ---
 
@@ -66,6 +68,17 @@ sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh install
 curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh -o install-mtproxy.sh
 chmod +x install-mtproxy.sh
 sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth bash ./install-mtproxy.sh install
+```
+
+### Stealth engine + per-device links
+
+```bash
+sudo \
+  PUBLIC_DOMAIN=proxy.example.com \
+  ENGINE=stealth \
+  LINK_STRATEGY=per-device \
+  DEVICE_NAMES=phone,desktop,tablet \
+  bash ./install-mtproxy.sh install
 ```
 
 ### Stealth engine + upstream decoy
@@ -137,6 +150,15 @@ sudo bash ./install-mtproxy.sh list-links
   - `primary-classic`
   - `reserve-classic`
   - `fallback-dd`
+
+### `LINK_STRATEGY=per-device`
+
+Пример для `DEVICE_NAMES=phone,desktop,tablet` и `ENGINE=stealth PRIMARY_PROFILE=ee`:
+
+- `phone-ee`
+- `desktop-ee`
+- `tablet-ee`
+- `shared-fallback-dd`
 
 ---
 
@@ -224,7 +246,8 @@ sudo bash ./install-mtproxy.sh uninstall
 | `WORKERS` | `1` | Количество воркеров official MTProxy |
 | `ENGINE` | `official` | `official` или `stealth` |
 | `PRIMARY_PROFILE` | engine-specific | Базовый профиль bundle |
-| `LINK_STRATEGY` | `bundle` | Стратегия выдачи ссылок |
+| `LINK_STRATEGY` | `bundle` | `bundle` или `per-device` |
+| `DEVICE_NAMES` | — | Список устройств через запятую для `LINK_STRATEGY=per-device` |
 | `TLS_DOMAIN` | `PUBLIC_DOMAIN` | Fake-TLS / SNI domain для `ENGINE=stealth` |
 | `DECOY_MODE` | `disabled` | `disabled` или `upstream-forward` |
 | `DECOY_TARGET_HOST` | — | Upstream target host для decoy |
@@ -299,7 +322,6 @@ sudo journalctl -u mtproxy.service -n 100 --no-pager
 
 ## Ограничения текущей итерации
 
-- `LINK_STRATEGY=per-device` пока не реализован;
 - `DECOY_MODE=local-https` пока не реализован;
 - автоматический decoy deployment не делается — для `upstream-forward` нужен уже существующий HTTPS target;
 - one-VPS deployment по-прежнему не защищает от прямой блокировки IP/ASN.
