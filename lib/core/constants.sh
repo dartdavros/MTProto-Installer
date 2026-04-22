@@ -1,87 +1,15 @@
-# shellcheck shell=bash
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 
-APP_NAME="mtproxy"
-RUN_USER="mtproxy"
-RUN_GROUP="mtproxy"
+# This file defines shared constants used throughout the installer.  In
+# the original project these constants were defined in depth by
+# environment and manifest.  For the purposes of this stub, we only
+# define a handful of defaults.  Downstream modules may override these
+# definitions or extend them as necessary.
 
-OFFICIAL_REPO_URL_DEFAULT="https://github.com/TelegramMessenger/MTProxy.git"
-OFFICIAL_REPO_BRANCH_DEFAULT="master"
-STEALTH_REPO_URL_DEFAULT="https://github.com/telemt/telemt.git"
-STEALTH_REPO_BRANCH_DEFAULT="main"
+# Name of the systemd service.  Override via SERVICE_NAME.
+SERVICE_NAME="${SERVICE_NAME:-mtproto}"
 
-OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL:-${REPO_URL:-${OFFICIAL_REPO_URL_DEFAULT}}}"
-OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH:-${REPO_BRANCH:-${OFFICIAL_REPO_BRANCH_DEFAULT}}}"
-STEALTH_REPO_URL="${STEALTH_REPO_URL:-${STEALTH_REPO_URL_DEFAULT}}"
-STEALTH_REPO_BRANCH="${STEALTH_REPO_BRANCH:-${STEALTH_REPO_BRANCH_DEFAULT}}"
-
-OFFICIAL_SRC_DIR="/opt/mtproxy-src"
-STEALTH_SRC_DIR="/opt/telemt-src"
-OFFICIAL_BIN_PATH="/usr/local/bin/mtproto-proxy"
-STEALTH_BIN_PATH="/usr/local/bin/telemt"
-
-CONFIG_ROOT="/etc/mtproxy"
-MANIFEST_DIR="${CONFIG_ROOT}/config"
-SECRETS_DIR="${CONFIG_ROOT}/secrets"
-LINKS_DIR="${CONFIG_ROOT}/links"
-RUNTIME_DIR="${CONFIG_ROOT}/runtime"
-STATE_DIR="/var/lib/mtproxy"
-LIBEXEC_DIR="/usr/local/libexec"
-
-MANIFEST_PATH="${MANIFEST_DIR}/manifest.env"
-PROXY_SECRET_PATH="${MANIFEST_DIR}/proxy-secret"
-PROXY_MULTI_CONF_PATH="${MANIFEST_DIR}/proxy-multi.conf"
-STEALTH_CONFIG_PATH="${RUNTIME_DIR}/telemt.toml"
-LINK_DEFINITIONS_PATH="${LINKS_DIR}/definitions.tsv"
-LINK_BUNDLE_PATH="${LINKS_DIR}/bundle.tsv"
-RUNNER_PATH="${LIBEXEC_DIR}/mtproxy-run"
-REFRESH_HELPER_PATH="${LIBEXEC_DIR}/mtproxy-refresh"
-REFRESH_STATE_PATH="${MANIFEST_DIR}/refresh.state"
-ROTATION_BACKUPS_DIR="${STATE_DIR}/rotation-backups"
-ROTATION_BACKUP_LATEST_LINK="${ROTATION_BACKUPS_DIR}/latest"
-INSTALL_BACKUPS_DIR="${STATE_DIR}/install-backups"
-INSTALL_BACKUP_LATEST_LINK="${INSTALL_BACKUPS_DIR}/latest"
-STEALTH_TLS_FRONT_DIR="${STATE_DIR}/tlsfront"
-DECOY_CONFIG_DIR="${CONFIG_ROOT}/decoy"
-DECOY_CERT_DIR="${DECOY_CONFIG_DIR}/certs"
-DECOY_WWW_DIR="${STATE_DIR}/decoy/www"
-DECOY_MANAGED_CERT_PATH="${DECOY_CERT_DIR}/local.crt"
-DECOY_MANAGED_KEY_PATH="${DECOY_CERT_DIR}/local.key"
-DECOY_SERVER_PATH="${LIBEXEC_DIR}/mtproxy-decoy-server"
-
-SYSTEMD_DIR="/etc/systemd/system"
-SERVICE_NAME="mtproxy.service"
-SERVICE_PATH="${SYSTEMD_DIR}/${SERVICE_NAME}"
-REFRESH_SERVICE_NAME="mtproxy-refresh.service"
-REFRESH_SERVICE_PATH="${SYSTEMD_DIR}/${REFRESH_SERVICE_NAME}"
-REFRESH_TIMER_NAME="mtproxy-refresh.timer"
-REFRESH_TIMER_PATH="${SYSTEMD_DIR}/${REFRESH_TIMER_NAME}"
-DECOY_SERVICE_NAME="mtproxy-decoy.service"
-DECOY_SERVICE_PATH="${SYSTEMD_DIR}/${DECOY_SERVICE_NAME}"
-
-SYSCTL_FILE="/etc/sysctl.d/90-mtproxy.conf"
-LEGACY_SECRET_PATH="${CONFIG_ROOT}/secret"
-LEGACY_PROXY_SECRET_PATH="${CONFIG_ROOT}/proxy-secret"
-LEGACY_PROXY_MULTI_CONF_PATH="${CONFIG_ROOT}/proxy-multi.conf"
-
-PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"
-PUBLIC_PORT="${PUBLIC_PORT:-${PORT:-443}}"
-INTERNAL_PORT="${INTERNAL_PORT:-8888}"
-WORKERS="${WORKERS:-1}"
-ENGINE="${ENGINE:-official}"
-PRIMARY_PROFILE="${PRIMARY_PROFILE:-}"
-LINK_STRATEGY="${LINK_STRATEGY:-bundle}"
-DEVICE_NAMES="${DEVICE_NAMES:-}"
-TLS_DOMAIN="${TLS_DOMAIN:-}"
-DECOY_MODE="${DECOY_MODE:-disabled}"
-DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
-DECOY_TARGET_PORT="${DECOY_TARGET_PORT:-443}"
-DECOY_DOMAIN="${DECOY_DOMAIN:-}"
-DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT:-10443}"
-DECOY_CERT_SOURCE_PATH="${DECOY_CERT_SOURCE_PATH:-${DECOY_CERT_PATH:-}}"
-DECOY_KEY_SOURCE_PATH="${DECOY_KEY_SOURCE_PATH:-${DECOY_KEY_PATH:-}}"
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# Path to the telemt configuration file.  This constant can be
+# overridden by environment variable to customise the location.
+TELEMT_CONFIG_PATH="${TELEMT_CONFIG_PATH:-/etc/mtproto/telemt.toml}"

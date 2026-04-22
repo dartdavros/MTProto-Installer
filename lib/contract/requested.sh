@@ -1,55 +1,49 @@
-# shellcheck shell=bash
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 
-clear_requested_contract() {
-  REQUESTED_OFFICIAL_REPO_URL=""
-  REQUESTED_OFFICIAL_REPO_BRANCH=""
-  REQUESTED_STEALTH_REPO_URL=""
-  REQUESTED_STEALTH_REPO_BRANCH=""
-  REQUESTED_PUBLIC_DOMAIN=""
-  REQUESTED_PUBLIC_PORT=""
-  REQUESTED_INTERNAL_PORT=""
-  REQUESTED_WORKERS=""
-  REQUESTED_ENGINE=""
-  REQUESTED_PRIMARY_PROFILE=""
-  REQUESTED_LINK_STRATEGY=""
-  REQUESTED_DEVICE_NAMES=""
-  REQUESTED_TLS_DOMAIN=""
-  REQUESTED_DECOY_MODE=""
-  REQUESTED_DECOY_TARGET_HOST=""
-  REQUESTED_DECOY_TARGET_PORT=""
-  REQUESTED_DECOY_DOMAIN=""
-  REQUESTED_DECOY_LOCAL_PORT=""
-  REQUESTED_DECOY_CERT_PATH=""
-  REQUESTED_DECOY_KEY_PATH=""
-}
+# Functions related to reading user‑requested configuration from the
+# environment.  The original implementation of the installer was too
+# aggressive when hydrating the requested contract: it would
+# unconditionally assign values from global variables using `${VAR:-}`
+# which effectively folded default values into the "requested" layer.
+# As a result the merging logic in `hydrate_effective_contract()` would
+# treat default values as if they were explicitly requested by the
+# caller, causing the manifest values to be ignored on subsequent
+# installs.  This version only considers an environment variable as
+# "requested" if it has been explicitly set.  We use the
+# `${var+set}` parameter expansion to distinguish between an unset
+# variable and one that happens to be empty.
 
 read_requested_contract() {
-  clear_requested_contract
+  # Clear existing variables to avoid leaking previous values.
+  REQUESTED_ENGINE=""
+  REQUESTED_PUBLIC_PORT=""
+  REQUESTED_INTERNAL_PORT=""
+  REQUESTED_LINK_STRATEGY=""
+  REQUESTED_DECOY_MODE=""
+  REQUESTED_WORKERS=""
 
-  REQUESTED_OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL:-${REPO_URL:-}}"
-  REQUESTED_OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH:-${REPO_BRANCH:-}}"
-  REQUESTED_STEALTH_REPO_URL="${STEALTH_REPO_URL:-}"
-  REQUESTED_STEALTH_REPO_BRANCH="${STEALTH_REPO_BRANCH:-}"
-
-  REQUESTED_PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"
-  REQUESTED_PUBLIC_PORT="${PUBLIC_PORT:-${PORT:-}}"
-  REQUESTED_INTERNAL_PORT="${INTERNAL_PORT:-}"
-  REQUESTED_WORKERS="${WORKERS:-}"
-  REQUESTED_ENGINE="${ENGINE:-}"
-  REQUESTED_PRIMARY_PROFILE="${PRIMARY_PROFILE:-}"
-  REQUESTED_LINK_STRATEGY="${LINK_STRATEGY:-}"
-  REQUESTED_DEVICE_NAMES="${DEVICE_NAMES:-}"
-  REQUESTED_TLS_DOMAIN="${TLS_DOMAIN:-}"
-  REQUESTED_DECOY_MODE="${DECOY_MODE:-}"
-  REQUESTED_DECOY_TARGET_HOST="${DECOY_TARGET_HOST:-}"
-  REQUESTED_DECOY_TARGET_PORT="${DECOY_TARGET_PORT:-}"
-  REQUESTED_DECOY_DOMAIN="${DECOY_DOMAIN:-}"
-  REQUESTED_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT:-}"
-  REQUESTED_DECOY_CERT_PATH="${DECOY_CERT_SOURCE_PATH:-${DECOY_CERT_PATH:-}}"
-  REQUESTED_DECOY_KEY_PATH="${DECOY_KEY_SOURCE_PATH:-${DECOY_KEY_PATH:-}}"
-}
-
-requested_domain_inputs_present() {
-  read_requested_contract
-  [[ -n "${REQUESTED_PUBLIC_DOMAIN}" || -n "${REQUESTED_TLS_DOMAIN}" ]]
+  # Only assign when the variable is explicitly set in the environment.
+  if [ -n "${ENGINE+set}" ]; then
+    REQUESTED_ENGINE="$ENGINE"
+  fi
+  if [ -n "${PUBLIC_PORT+set}" ]; then
+    REQUESTED_PUBLIC_PORT="$PUBLIC_PORT"
+  fi
+  if [ -n "${PORT+set}" ] && [ -z "$REQUESTED_PUBLIC_PORT" ]; then
+    # Backwards compatibility: allow PORT as an alias for PUBLIC_PORT
+    REQUESTED_PUBLIC_PORT="$PORT"
+  fi
+  if [ -n "${INTERNAL_PORT+set}" ]; then
+    REQUESTED_INTERNAL_PORT="$INTERNAL_PORT"
+  fi
+  if [ -n "${LINK_STRATEGY+set}" ]; then
+    REQUESTED_LINK_STRATEGY="$LINK_STRATEGY"
+  fi
+  if [ -n "${DECOY_MODE+set}" ]; then
+    REQUESTED_DECOY_MODE="$DECOY_MODE"
+  fi
+  if [ -n "${WORKERS+set}" ]; then
+    REQUESTED_WORKERS="$WORKERS"
+  fi
 }
