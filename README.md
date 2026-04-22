@@ -1,148 +1,121 @@
-# MTProxy Private Deploy
+🦺 MTProxy Installer
 
-`install-mtproxy.sh` — это installer и operator entrypoint для приватного MTProto proxy на Ubuntu 24.04.
+Скрипт для установки и управления Telegram MTProto Proxy на Ubuntu 24.04.
+Поддерживает stealth-режим и decoy-контур.
 
-Поддерживаются два режима:
-- `ENGINE=official` — официальный `TelegramMessenger/MTProxy`
-- `ENGINE=stealth` — `telemt` с профилями `ee`, `dd`, `classic`
+📋 Что нужно перед установкой
 
-## Что это
+VPS на Ubuntu 24.04.
+Скрипт рассчитан именно на эту систему.
 
-Проект поднимает приватный proxy на одном VPS и управляет им через один скрипт.
+Root-доступ.
+Нужен для установки пакетов, настройки systemd, firewall и системных файлов.
 
-Ключевые свойства:
-- домен обязателен при первой установке;
-- сервис публикуется на одном публичном порту, по умолчанию `443/tcp`;
-- создается bundle из нескольких ссылок, а не одна ссылка;
-- секреты и `tg://` ссылки не печатаются в обычном выводе;
-- есть команды для статуса, health-check, ротации ссылок, ручного refresh и удаления.
+Основной домен.
+Он нужен для клиентских ссылок и основной точки подключения прокси.
+Пример: mtp.example.com
 
-## Как это работает
+Второй домен, если ты планируешь использовать decoy.
+Он нужен только для decoy-сценария. Если decoy не используешь, второй домен не нужен.
+Пример: cdn.example.com
 
-После `install` скрипт:
-- собирает и устанавливает выбранный runtime;
-- сохраняет deployment manifest и runtime artifacts в `/etc/mtproxy`;
-- создает systemd unit'ы и запускает сервис;
-- генерирует managed bundle ссылок;
-- для `ENGINE=official` включает daily refresh Telegram config через systemd timer.
+Открытый публичный TCP-порт.
+Основной внешний вход — 443/tcp.
 
-По умолчанию после установки выводится только безопасная сводка. Чтобы получить реальные клиентские ссылки, нужно вызвать `share-links`.
+DNS-записи доменов должны указывать на твой VPS.
+Иначе клиентские ссылки и проверка домена будут работать некорректно.
 
-## Требования
+📦 Установка
 
-- Ubuntu 24.04
-- root-доступ
-- домен, который уже указывает на VPS
-- открытый TCP-порт `443` или другой `PUBLIC_PORT`
+Скачай скрипт:
 
-Для `ENGINE=stealth`:
-- `DECOY_MODE=upstream-forward` требует рабочий HTTPS upstream;
-- `DECOY_MODE=local-https` может использовать готовый сертификат или сгенерировать self-signed сертификат.
-
-## Установка и запуск
-
-### Быстрый старт: official
-
-```bash
 curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh -o install-mtproxy.sh
 chmod +x install-mtproxy.sh
-sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh install
-```
 
-### Быстрый старт: stealth
+Запусти скрипт:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh -o install-mtproxy.sh
-chmod +x install-mtproxy.sh
-sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth bash ./install-mtproxy.sh install
-```
+sudo bash ./install-mtproxy.sh
 
-### После установки
+Дальше следуй шагам интерактивного режима.
 
-Сервис запускается автоматически.
+🔗 На выходе получаете
 
-Проверить состояние:
+После установки будет настроен сервис прокси и подготовлен набор клиентских ссылок.
 
-```bash
+По умолчанию ссылки и секреты не показываются в обычном выводе.
+Чтобы получить ссылки явно, используй команду share-links.
+
+⚙️ Команды
+
+Установка:
+sudo bash ./install-mtproxy.sh install
+
+Статус:
 sudo bash ./install-mtproxy.sh status
+
+Проверка состояния:
 sudo bash ./install-mtproxy.sh health
-```
 
-Получить клиентские ссылки:
-
-```bash
+Показать ссылки подключения:
 sudo bash ./install-mtproxy.sh share-links
-```
 
-Посмотреть только redacted metadata:
-
-```bash
+Показать список ссылок без секретов:
 sudo bash ./install-mtproxy.sh list-links
-```
 
-## Основные команды
-
-```bash
-sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh install
-sudo bash ./install-mtproxy.sh status
-sudo bash ./install-mtproxy.sh health
-sudo bash ./install-mtproxy.sh share-links
-sudo bash ./install-mtproxy.sh list-links
+Ротация одной ссылки:
 sudo bash ./install-mtproxy.sh rotate-link <name>
+
+Ротация всех ссылок:
 sudo bash ./install-mtproxy.sh rotate-all-links
+
+Обновление конфигов Telegram:
 sudo bash ./install-mtproxy.sh refresh-telegram-config
+
+Перезапуск:
 sudo bash ./install-mtproxy.sh restart
+
+Проверка домена:
 sudo bash ./install-mtproxy.sh check-domain
+
+Проверка decoy-контура:
 sudo bash ./install-mtproxy.sh test-decoy
-sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh migrate-install
+
+Удаление:
 sudo bash ./install-mtproxy.sh uninstall
-```
 
-Коротко по назначению:
-- `install` — установка или повторная реконсиляция конфигурации;
-- `status` — состояние сервиса, redacted links и последние логи;
-- `health` — диагностика сервиса и конфигурации;
-- `share-links` — намеренно показать реальные клиентские ссылки;
-- `list-links` — показать bundle без раскрытия секретов;
-- `rotate-link <name>` — перевыпустить одну ссылку;
-- `rotate-all-links` — перевыпустить все ссылки;
-- `refresh-telegram-config` — вручную обновить Telegram config;
-- `restart` — перезапустить managed runtime;
-- `check-domain` — проверить DNS домена;
-- `test-decoy` — проверить decoy contour;
-- `migrate-install` — миграция со старой раскладки;
-- `uninstall` — удалить сервис и managed artifacts.
+🔍 Проверка работы
 
-## Как обновить
+Статус сервиса:
+sudo bash ./install-mtproxy.sh status
 
-Обновление выполняется той же командой `install`.
+Расширенная проверка:
+sudo bash ./install-mtproxy.sh health
 
-### Обновить current install
+Логи:
+sudo journalctl -u mtproxy -n 100 --no-pager
 
-```bash
-sudo PUBLIC_DOMAIN=proxy.example.com bash ./install-mtproxy.sh install
-```
+Или в live-режиме:
+sudo journalctl -u mtproxy -f
 
-### Обновить и переключиться на stealth
+🔄 Как обновить
 
-```bash
-sudo PUBLIC_DOMAIN=proxy.example.com ENGINE=stealth bash ./install-mtproxy.sh install
-```
+Скачай актуальную версию скрипта поверх старой:
 
-### Обновить только Telegram config вручную
+curl -fsSL https://raw.githubusercontent.com/dartdavros/MTProto-Installer/main/install-mtproxy.sh -o install-mtproxy.sh
+chmod +x install-mtproxy.sh
 
-```bash
-sudo bash ./install-mtproxy.sh refresh-telegram-config
-```
+После этого снова запусти:
 
-## Как удалить
+sudo bash ./install-mtproxy.sh
 
-```bash
+Дальше выбери нужное действие в интерактивном режиме.
+
+🗑 Как удалить
+
+Для удаления используй:
+
 sudo bash ./install-mtproxy.sh uninstall
-```
 
-Команда останавливает и удаляет managed systemd units, бинарники, helper scripts, конфиги и state каталоги.
+📄 Лицензия
 
-## Лицензия
-
-Проект распространяется под лицензией [MIT](LICENSE).
+MIT — based on MTProxy
