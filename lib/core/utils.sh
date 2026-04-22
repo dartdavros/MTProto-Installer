@@ -48,7 +48,7 @@ interactive_prompt_install_contract() {
   current_decoy_local_port="${DECOY_LOCAL_PORT:-$(manifest_default_value DECOY_LOCAL_PORT 2>/dev/null || true)}"
 
   export PUBLIC_DOMAIN="$(prompt_with_default 'Основной домен PUBLIC_DOMAIN' "${current_domain}")"
-  export ENGINE="$(prompt_with_default 'ENGINE (official|stealth)' "${current_engine:-official}")"
+  export ENGINE="$(prompt_with_default 'ENGINE (official|stealth)' "${current_engine:-stealth}")"
   export PUBLIC_PORT="$(prompt_with_default 'Публичный порт PUBLIC_PORT' "${current_public_port:-443}")"
   export LINK_STRATEGY="$(prompt_with_default 'Стратегия ссылок LINK_STRATEGY (bundle|per-device)' "${current_link_strategy:-bundle}")"
 

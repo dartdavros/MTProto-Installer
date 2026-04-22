@@ -22,7 +22,9 @@ read_requested_contract() {
   REQUESTED_STEALTH_REPO_URL=""
   REQUESTED_STEALTH_REPO_BRANCH=""
 
-  [[ -n "${PUBLIC_DOMAIN+set}" ]] && REQUESTED_PUBLIC_DOMAIN="${PUBLIC_DOMAIN}"
+  if [[ -n "${PUBLIC_DOMAIN+set}" ]]; then
+    REQUESTED_PUBLIC_DOMAIN="${PUBLIC_DOMAIN}"
+  fi
 
   if [[ -n "${PUBLIC_PORT+set}" ]]; then
     REQUESTED_PUBLIC_PORT="${PUBLIC_PORT}"
@@ -30,22 +32,75 @@ read_requested_contract() {
     REQUESTED_PUBLIC_PORT="${PORT}"
   fi
 
-  [[ -n "${INTERNAL_PORT+set}" ]] && REQUESTED_INTERNAL_PORT="${INTERNAL_PORT}"
-  [[ -n "${WORKERS+set}" ]] && REQUESTED_WORKERS="${WORKERS}"
-  [[ -n "${ENGINE+set}" ]] && REQUESTED_ENGINE="${ENGINE}"
-  [[ -n "${PRIMARY_PROFILE+set}" ]] && REQUESTED_PRIMARY_PROFILE="${PRIMARY_PROFILE}"
-  [[ -n "${LINK_STRATEGY+set}" ]] && REQUESTED_LINK_STRATEGY="${LINK_STRATEGY}"
-  [[ -n "${DEVICE_NAMES+set}" ]] && REQUESTED_DEVICE_NAMES="${DEVICE_NAMES}"
-  [[ -n "${TLS_DOMAIN+set}" ]] && REQUESTED_TLS_DOMAIN="${TLS_DOMAIN}"
-  [[ -n "${DECOY_MODE+set}" ]] && REQUESTED_DECOY_MODE="${DECOY_MODE}"
-  [[ -n "${DECOY_TARGET_HOST+set}" ]] && REQUESTED_DECOY_TARGET_HOST="${DECOY_TARGET_HOST}"
-  [[ -n "${DECOY_TARGET_PORT+set}" ]] && REQUESTED_DECOY_TARGET_PORT="${DECOY_TARGET_PORT}"
-  [[ -n "${DECOY_DOMAIN+set}" ]] && REQUESTED_DECOY_DOMAIN="${DECOY_DOMAIN}"
-  [[ -n "${DECOY_LOCAL_PORT+set}" ]] && REQUESTED_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT}"
-  [[ -n "${DECOY_CERT_PATH+set}" ]] && REQUESTED_DECOY_CERT_PATH="${DECOY_CERT_PATH}"
-  [[ -n "${DECOY_KEY_PATH+set}" ]] && REQUESTED_DECOY_KEY_PATH="${DECOY_KEY_PATH}"
-  [[ -n "${OFFICIAL_REPO_URL+set}" ]] && REQUESTED_OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL}"
-  [[ -n "${OFFICIAL_REPO_BRANCH+set}" ]] && REQUESTED_OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH}"
-  [[ -n "${STEALTH_REPO_URL+set}" ]] && REQUESTED_STEALTH_REPO_URL="${STEALTH_REPO_URL}"
-  [[ -n "${STEALTH_REPO_BRANCH+set}" ]] && REQUESTED_STEALTH_REPO_BRANCH="${STEALTH_REPO_BRANCH}"
+  if [[ -n "${INTERNAL_PORT+set}" ]]; then
+    REQUESTED_INTERNAL_PORT="${INTERNAL_PORT}"
+  fi
+
+  if [[ -n "${WORKERS+set}" ]]; then
+    REQUESTED_WORKERS="${WORKERS}"
+  fi
+
+  if [[ -n "${ENGINE+set}" ]]; then
+    REQUESTED_ENGINE="${ENGINE}"
+  fi
+
+  if [[ -n "${PRIMARY_PROFILE+set}" ]]; then
+    REQUESTED_PRIMARY_PROFILE="${PRIMARY_PROFILE}"
+  fi
+
+  if [[ -n "${LINK_STRATEGY+set}" ]]; then
+    REQUESTED_LINK_STRATEGY="${LINK_STRATEGY}"
+  fi
+
+  if [[ -n "${DEVICE_NAMES+set}" ]]; then
+    REQUESTED_DEVICE_NAMES="${DEVICE_NAMES}"
+  fi
+
+  if [[ -n "${TLS_DOMAIN+set}" ]]; then
+    REQUESTED_TLS_DOMAIN="${TLS_DOMAIN}"
+  fi
+
+  if [[ -n "${DECOY_MODE+set}" ]]; then
+    REQUESTED_DECOY_MODE="${DECOY_MODE}"
+  fi
+
+  if [[ -n "${DECOY_TARGET_HOST+set}" ]]; then
+    REQUESTED_DECOY_TARGET_HOST="${DECOY_TARGET_HOST}"
+  fi
+
+  if [[ -n "${DECOY_TARGET_PORT+set}" ]]; then
+    REQUESTED_DECOY_TARGET_PORT="${DECOY_TARGET_PORT}"
+  fi
+
+  if [[ -n "${DECOY_DOMAIN+set}" ]]; then
+    REQUESTED_DECOY_DOMAIN="${DECOY_DOMAIN}"
+  fi
+
+  if [[ -n "${DECOY_LOCAL_PORT+set}" ]]; then
+    REQUESTED_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT}"
+  fi
+
+  if [[ -n "${DECOY_CERT_PATH+set}" ]]; then
+    REQUESTED_DECOY_CERT_PATH="${DECOY_CERT_PATH}"
+  fi
+
+  if [[ -n "${DECOY_KEY_PATH+set}" ]]; then
+    REQUESTED_DECOY_KEY_PATH="${DECOY_KEY_PATH}"
+  fi
+
+  if [[ -n "${OFFICIAL_REPO_URL+set}" ]]; then
+    REQUESTED_OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL}"
+  fi
+
+  if [[ -n "${OFFICIAL_REPO_BRANCH+set}" ]]; then
+    REQUESTED_OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH}"
+  fi
+
+  if [[ -n "${STEALTH_REPO_URL+set}" ]]; then
+    REQUESTED_STEALTH_REPO_URL="${STEALTH_REPO_URL}"
+  fi
+
+  if [[ -n "${STEALTH_REPO_BRANCH+set}" ]]; then
+    REQUESTED_STEALTH_REPO_BRANCH="${STEALTH_REPO_BRANCH}"
+  fi
 }

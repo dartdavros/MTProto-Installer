@@ -100,7 +100,10 @@ parse_legacy_service_exec_flag() {
 populate_contract_from_legacy_service_if_needed() {
   local legacy_public_port legacy_internal_port legacy_workers
 
-  [[ -f "${MANIFEST_PATH}" ]] && return 0
+  if [[ -f "${MANIFEST_PATH}" ]]; then
+    return 0
+  fi
+
   [[ -f "${SERVICE_PATH}" ]] || return 0
 
   read_requested_contract
@@ -126,7 +129,10 @@ populate_contract_from_legacy_service_if_needed() {
 }
 
 migrate_legacy_layout_if_present() {
-  [[ -f "${MANIFEST_PATH}" ]] && return 0
+  if [[ -f "${MANIFEST_PATH}" ]]; then
+    return 0
+  fi
+
   [[ -f "${LINK_DEFINITIONS_PATH}" ]] || return 0
 
   import_legacy_client_secret_if_present

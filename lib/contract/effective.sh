@@ -114,7 +114,7 @@ hydrate_effective_contract() {
       ;;
   esac
 
-  ENGINE="$(pick_effective_value "${requested_engine}" "${MANIFEST_ENGINE:-}" "official")"
+  ENGINE="$(pick_effective_value "${requested_engine}" "${MANIFEST_ENGINE:-}" "stealth")"
   default_profile="$(default_primary_profile_for_engine "${ENGINE}")"
 
   PUBLIC_DOMAIN="$(pick_effective_value "${requested_public_domain}" "${MANIFEST_PUBLIC_DOMAIN:-}" "")"
