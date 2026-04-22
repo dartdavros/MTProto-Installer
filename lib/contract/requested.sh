@@ -1,49 +1,51 @@
-#!/usr/bin/env bash
-# SPDX-License-Identifier: MIT
-
-# Functions related to reading user‑requested configuration from the
-# environment.  The original implementation of the installer was too
-# aggressive when hydrating the requested contract: it would
-# unconditionally assign values from global variables using `${VAR:-}`
-# which effectively folded default values into the "requested" layer.
-# As a result the merging logic in `hydrate_effective_contract()` would
-# treat default values as if they were explicitly requested by the
-# caller, causing the manifest values to be ignored on subsequent
-# installs.  This version only considers an environment variable as
-# "requested" if it has been explicitly set.  We use the
-# `${var+set}` parameter expansion to distinguish between an unset
-# variable and one that happens to be empty.
+# shellcheck shell=bash
 
 read_requested_contract() {
-  # Clear existing variables to avoid leaking previous values.
-  REQUESTED_ENGINE=""
+  REQUESTED_PUBLIC_DOMAIN=""
   REQUESTED_PUBLIC_PORT=""
   REQUESTED_INTERNAL_PORT=""
-  REQUESTED_LINK_STRATEGY=""
-  REQUESTED_DECOY_MODE=""
   REQUESTED_WORKERS=""
+  REQUESTED_ENGINE=""
+  REQUESTED_PRIMARY_PROFILE=""
+  REQUESTED_LINK_STRATEGY=""
+  REQUESTED_DEVICE_NAMES=""
+  REQUESTED_TLS_DOMAIN=""
+  REQUESTED_DECOY_MODE=""
+  REQUESTED_DECOY_TARGET_HOST=""
+  REQUESTED_DECOY_TARGET_PORT=""
+  REQUESTED_DECOY_DOMAIN=""
+  REQUESTED_DECOY_LOCAL_PORT=""
+  REQUESTED_DECOY_CERT_PATH=""
+  REQUESTED_DECOY_KEY_PATH=""
+  REQUESTED_OFFICIAL_REPO_URL=""
+  REQUESTED_OFFICIAL_REPO_BRANCH=""
+  REQUESTED_STEALTH_REPO_URL=""
+  REQUESTED_STEALTH_REPO_BRANCH=""
 
-  # Only assign when the variable is explicitly set in the environment.
-  if [ -n "${ENGINE+set}" ]; then
-    REQUESTED_ENGINE="$ENGINE"
+  [[ -n "${PUBLIC_DOMAIN+set}" ]] && REQUESTED_PUBLIC_DOMAIN="${PUBLIC_DOMAIN}"
+
+  if [[ -n "${PUBLIC_PORT+set}" ]]; then
+    REQUESTED_PUBLIC_PORT="${PUBLIC_PORT}"
+  elif [[ -n "${PORT+set}" ]]; then
+    REQUESTED_PUBLIC_PORT="${PORT}"
   fi
-  if [ -n "${PUBLIC_PORT+set}" ]; then
-    REQUESTED_PUBLIC_PORT="$PUBLIC_PORT"
-  fi
-  if [ -n "${PORT+set}" ] && [ -z "$REQUESTED_PUBLIC_PORT" ]; then
-    # Backwards compatibility: allow PORT as an alias for PUBLIC_PORT
-    REQUESTED_PUBLIC_PORT="$PORT"
-  fi
-  if [ -n "${INTERNAL_PORT+set}" ]; then
-    REQUESTED_INTERNAL_PORT="$INTERNAL_PORT"
-  fi
-  if [ -n "${LINK_STRATEGY+set}" ]; then
-    REQUESTED_LINK_STRATEGY="$LINK_STRATEGY"
-  fi
-  if [ -n "${DECOY_MODE+set}" ]; then
-    REQUESTED_DECOY_MODE="$DECOY_MODE"
-  fi
-  if [ -n "${WORKERS+set}" ]; then
-    REQUESTED_WORKERS="$WORKERS"
-  fi
+
+  [[ -n "${INTERNAL_PORT+set}" ]] && REQUESTED_INTERNAL_PORT="${INTERNAL_PORT}"
+  [[ -n "${WORKERS+set}" ]] && REQUESTED_WORKERS="${WORKERS}"
+  [[ -n "${ENGINE+set}" ]] && REQUESTED_ENGINE="${ENGINE}"
+  [[ -n "${PRIMARY_PROFILE+set}" ]] && REQUESTED_PRIMARY_PROFILE="${PRIMARY_PROFILE}"
+  [[ -n "${LINK_STRATEGY+set}" ]] && REQUESTED_LINK_STRATEGY="${LINK_STRATEGY}"
+  [[ -n "${DEVICE_NAMES+set}" ]] && REQUESTED_DEVICE_NAMES="${DEVICE_NAMES}"
+  [[ -n "${TLS_DOMAIN+set}" ]] && REQUESTED_TLS_DOMAIN="${TLS_DOMAIN}"
+  [[ -n "${DECOY_MODE+set}" ]] && REQUESTED_DECOY_MODE="${DECOY_MODE}"
+  [[ -n "${DECOY_TARGET_HOST+set}" ]] && REQUESTED_DECOY_TARGET_HOST="${DECOY_TARGET_HOST}"
+  [[ -n "${DECOY_TARGET_PORT+set}" ]] && REQUESTED_DECOY_TARGET_PORT="${DECOY_TARGET_PORT}"
+  [[ -n "${DECOY_DOMAIN+set}" ]] && REQUESTED_DECOY_DOMAIN="${DECOY_DOMAIN}"
+  [[ -n "${DECOY_LOCAL_PORT+set}" ]] && REQUESTED_DECOY_LOCAL_PORT="${DECOY_LOCAL_PORT}"
+  [[ -n "${DECOY_CERT_PATH+set}" ]] && REQUESTED_DECOY_CERT_PATH="${DECOY_CERT_PATH}"
+  [[ -n "${DECOY_KEY_PATH+set}" ]] && REQUESTED_DECOY_KEY_PATH="${DECOY_KEY_PATH}"
+  [[ -n "${OFFICIAL_REPO_URL+set}" ]] && REQUESTED_OFFICIAL_REPO_URL="${OFFICIAL_REPO_URL}"
+  [[ -n "${OFFICIAL_REPO_BRANCH+set}" ]] && REQUESTED_OFFICIAL_REPO_BRANCH="${OFFICIAL_REPO_BRANCH}"
+  [[ -n "${STEALTH_REPO_URL+set}" ]] && REQUESTED_STEALTH_REPO_URL="${STEALTH_REPO_URL}"
+  [[ -n "${STEALTH_REPO_BRANCH+set}" ]] && REQUESTED_STEALTH_REPO_BRANCH="${STEALTH_REPO_BRANCH}"
 }

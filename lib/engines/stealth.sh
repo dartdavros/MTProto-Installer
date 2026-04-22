@@ -50,7 +50,7 @@ secure = ${HAS_SECURE}
 tls = ${HAS_TLS}
 
 [general.links]
-show = "*"
+show = []
 public_host = "${PUBLIC_DOMAIN}"
 public_port = ${PUBLIC_PORT}
 

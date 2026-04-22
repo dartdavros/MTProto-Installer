@@ -40,6 +40,8 @@ chmod +x install-mtproxy.sh
 sudo bash ./install-mtproxy.sh
 ```
 
+Если рядом нет полного репозитория, bootstrap-скрипт сам подтянет полный installer runtime и сохранит его в `/opt/mtproxy-installer/current`, после чего продолжит установку уже из постоянного каталога.
+
 Дальше следуй шагам интерактивного режима.
 
 ## 🔗 На выходе получаете
@@ -163,6 +165,8 @@ chmod +x install-mtproxy.sh
 ```bash
 sudo bash ./install-mtproxy.sh
 ```
+
+Если файл скачан отдельно, он обновит bootstrap-runtime и снова передаст выполнение в постоянный installer runtime.
 
 Дальше выбери нужное действие в интерактивном режиме.
 

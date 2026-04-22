@@ -24,7 +24,4 @@ status() {
   echo
   echo "Links (redacted):"
   print_links_table "no"
-  echo
-  echo "Recent logs:"
-  journalctl -u "${SERVICE_NAME}" -n 20 --no-pager || true
 }
