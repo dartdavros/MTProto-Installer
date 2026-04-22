@@ -32,13 +32,60 @@ ufw_delete_deny_tcp_port() {
   ufw --force delete deny "${port}/tcp" >/dev/null 2>&1 || true
 }
 
+firewall_current_public_port() {
+  local public_port="${PUBLIC_PORT:-}"
+
+  if [[ -z "${public_port}" ]]; then
+    public_port="$(manifest_default_value PUBLIC_PORT 2>/dev/null || printf '443')"
+  fi
+
+  printf '%s
+' "${public_port}"
+}
+
+firewall_current_internal_port() {
+  local internal_port="${INTERNAL_PORT:-}"
+
+  if [[ -z "${internal_port}" ]]; then
+    internal_port="$(manifest_default_value INTERNAL_PORT 2>/dev/null || printf '8888')"
+  fi
+
+  printf '%s
+' "${internal_port}"
+}
+
+firewall_current_decoy_mode() {
+  local decoy_mode="${DECOY_MODE:-}"
+
+  if [[ -z "${decoy_mode}" ]]; then
+    decoy_mode="$(manifest_default_value DECOY_MODE 2>/dev/null || printf 'disabled')"
+  fi
+
+  printf '%s
+' "${decoy_mode}"
+}
+
+firewall_current_decoy_local_port() {
+  local decoy_local_port="${DECOY_LOCAL_PORT:-}"
+
+  if [[ -z "${decoy_local_port}" ]]; then
+    decoy_local_port="$(manifest_default_value DECOY_LOCAL_PORT 2>/dev/null || true)"
+  fi
+
+  printf '%s
+' "${decoy_local_port}"
+}
+
 firewall_can_manage_local_only_port() {
   local port="$1"
+  local public_port
+
+  public_port="$(firewall_current_public_port)"
 
   [[ -n "${port}" ]] || return 1
 
   case "${port}" in
-    "${PUBLIC_PORT}")
+    "${public_port}")
       return 1
       ;;
     22)
@@ -110,19 +157,26 @@ configure_firewall() {
 }
 
 remove_managed_firewall_policy() {
-  local managed_local_only_ports=("${INTERNAL_PORT}" "9091")
+  local public_port internal_port decoy_mode decoy_local_port
+  local managed_local_only_ports
   local port
   local seen=" "
+
+  public_port="$(firewall_current_public_port)"
+  internal_port="$(firewall_current_internal_port)"
+  decoy_mode="$(firewall_current_decoy_mode)"
+  decoy_local_port="$(firewall_current_decoy_local_port)"
+  managed_local_only_ports=("${internal_port}" "9091")
 
   if ! ufw_available || ! ufw_active; then
     return 0
   fi
 
   info "Удаляю managed firewall policy..."
-  ufw_delete_allow_tcp_port "${PUBLIC_PORT}"
+  ufw_delete_allow_tcp_port "${public_port}"
 
-  if [[ "${DECOY_MODE}" == "local-https" ]]; then
-    managed_local_only_ports+=("${DECOY_LOCAL_PORT}")
+  if [[ "${decoy_mode}" == "local-https" ]]; then
+    managed_local_only_ports+=("${decoy_local_port}")
   fi
 
   for port in "${managed_local_only_ports[@]}"; do
